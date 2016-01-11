@@ -10,4 +10,8 @@
 	
 	StackOverflow 将全文搜索和定位查询结合起来，并使用模糊匹配的方式找到相关联的问题和答案。
 	
-	GitHub
+	GitHub 使用Elasticsearch来查询超过130,000,000,000行的代码。
+	
+	不过Elasticsearch并不是只适用于大型企业，它也使得一些小型企业得以将原型概念发展为可以迭代的解决方案，比如说Datadog和Klout。它可以运行在
+
+	
