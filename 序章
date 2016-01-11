@@ -1,0 +1,13 @@
+										ElasticSearch documentation traslation
+	
+	Elasticsearch是一个实时分析搜索引擎。它使你能以前所未有的速度和规模来探索你的数据。它主要应用于全文搜索、结构化查询、分析学。以及三种
+
+运用的混合使用，如：
+
+	Wikipedia 使用Elasticsearch来提供对高热度的搜索片段的全文搜索，即时输入，即时搜索的功能，以及语义推测建议这些功能。
+	
+	Guardian 使用Elasticsearch 将访问日志与社交网络数据结合来为它的编辑提供对新文章的实时用户反馈。
+	
+	StackOverflow 将全文搜索和定位查询结合起来，并使用模糊匹配的方式找到相关联的问题和答案。
+	
+	GitHub
