@@ -1,0 +1,62 @@
+	如何与Elasticsearch通信，这取决于你是否使用Java作为编程语言。
+	
+	Java API
+	
+	如果你是Java使用这，有两种内置的客户端可供使用：
+	
+	节点客户端：
+	
+	节点客户端以无数据节点的形式加入到一个本地的集群。也就是说，它本身不含有任何信息，但它集群中其他节点都带有哪些信息，并且可以将请
+
+求推送到正确的节点上去。
+
+	传输客户端：
+	
+	轻量级的传输客户端可以将请求发送到一个远程的集群，它本身并不属于这个集群，仅仅是将请求发送到集群中的一个节点而已。
+	
+	这两种客户端都与9300端口上的集群通信，通信遵循本地的Elasticsearch传输协议。集群中的节点也会通过9300端口相互通信。如果此端口被关闭，节
+	
+点就无法组成一个集群。
+
+	小贴士：java的节点客户端必须和elasticsearch的java版本一致；否则它们可能无法正确的通信。
+	
+	更多信息请访问https://www.elastic.co/guide/en/elasticsearch/client/index.html
+	
+	RESTful API
+	
+	任意编程语言都可以通过9200端口的RESTful API与Elasticsearch通信,不论你使用的是何种web客户端均可接入其中。事实上，你甚至可以在命令行
+	
+控制台中用curl命令来与它通信。
+
+	小贴士：Elasticsearch为多种编程语言提供了专门的客户端，如：Groovy,JavaScript,.NET,PHP,Perl,Python,Ruby，并且社区也提供了多种客户端
+	
+以及集成运用，你可以在https://www.elastic.co/guide/en/elasticsearch/client/index.html找到它们。
+
+	任意通过HTTP协议发出的Elasticsearch请求都应该具有以下的部分：
+	
+	curl -X<VERB> '<PROTOCOL>://<HOST>:<PORT>/<PATH>?<QUERY_STRING>' -d '<BODY>'
+	
+	各部分含义如下：
+	
+	VERB：HTTP请求的方法，如：GET, POST, PUT, HEAD, or DELETE.
+	
+	PROTOCOL:http or https
+	
+	HOST:你的Elasticsearch集群中的任意一个节点的主机名
+	
+	PORT：运行Elasticsearch HTTP服务的端口，默认是9200
+	
+	PATH：API终结点，如：_count会返回集群中的文档数量。路径可能会包含多个部分组成，如_cluster/stats or _nodes/stats/jvm
+	
+	QUERY_STRING：任意可选的查询字串参数，如：?pretty将会按照Json的格式打印出相应
+	
+	BODY：Json格式的请求报文实体
+	
+	举例来说，要获取集群中文档的数量的话，可以使用以下命令：
+	
+	curl -XGET 'http://localhost:9200/_count?pretty' -d '
+	{
+	    "query": {
+	        "match_all": {}
+	    }
+	}
