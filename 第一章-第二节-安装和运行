@@ -2,4 +2,74 @@
 	
 	安装Elasticsearch仅需要安装最新版本的Java，最好是从www.java.com处下载最近的java版本。
 	
-	Elasticsearch最新版本的地址是
+	Elasticsearch最新版本的地址是 elasticsearch.co/downloads/elasticsearch.在这里下载并获取与你平台向匹配的档案文件来安装Elasticsearch
+
+请通过  安装  这一章获取更多地信息。
+
+	小贴士：当在生产环境安装Elasticsearch的时候，你可以选择使用下载页https://www.elastic.co/downloads/elasticsearch中的Debian或者RPM。
+
+你也可以使用官方支持的Puppet module或Chef cookbook.
+
+	当你获取到档案文件之后，就是开始运行Elasticsearch了，在前台开启它：
+	
+	cd elasticsearch-<version>
+	./bin/elasticsearch  
+	
+	如果你希望在后台以守护进程的模式运行它的话，加上-d
+	
+	如果是在Windows平台上的话，运行bin\elasticsearch.bat就可以了
+	
+	通过打开另外一个终端窗口并运行以下命令来测试它：
+	
+	curl 'http://localhost:9200/?pretty'
+	
+	小贴士：如果你在Windows上运行Elasticsearch的话，你可以下载cURL http://curl.haxx.se/download.html 。cURL提供了一种非常方便的途径向Elasticsearch
+	
+提交请求，并且它还支持直接将这本书里大部分的示例直接复制黏贴运行。
+
+	你可以看到以下的响应：
+	
+	{
+	  "name" : "Tom Foster",
+	  "cluster_name" : "elasticsearch",
+	  "version" : {
+	    "number" : "2.1.0",
+	    "build_hash" : "72cd1f1a3eee09505e036106146dc1949dc5dc87",
+	    "build_timestamp" : "2015-11-18T22:40:03Z",
+	    "build_snapshot" : false,
+	    "lucene_version" : "5.3.1"
+	  },
+	  "tagline" : "You Know, for Search"
+	}
+	
+	这意味着你已经有了一个Elasticsearch的节点启动并开始运行了。一个节点就是一个正在运行的Elasticsearch实例。一个集群就是一组具有相同集群名称的
+	
+节点。它们相互之间共享数据，并且提供灾备和扩展的功能。一个集群至少拥有一个节点。你可以在elasticsearch.yml中修改cluster.name，这个配置文件在节点被启动
+
+的时候会被夹在。更多配置文件相关信息请查看这本书末尾的生产环境部署这一小节的内容。
+
+	小贴士：通过安装Sense控制台来运行书中的例子，观察结果，以此可以模拟Elasticsearch集群。https://www.elastic.co/guide/en/elasticsearch/guide/master/running-elasticsearch.html#sense
+	
+	当Elasticsearch在前台运行的时候，可以通过Ctrl+C来停止它。
+	
+	Sense是一个Kibana应用，它提供一个交互控制台来使你通过浏览器直接提交请求给Elasticsearch。书中的大多数例子在Sense连接中都有相应的页面，点击即会打开
+
+相应的可运行的控制台。Sense不是必须的，但是它可以使你进一步的体验Elasticsearch集群的功能。
+
+	通过以下步骤来安装和运行Sense:
+	
+	1.在Kibana的路径下运行以下命令来下载和安装Sense应用：
+	
+	./bin/kibana plugin --install elastic/sense
+	
+	小贴士：Windows:bin\kibana.bat plugin --install elastic/sense.
+	
+	You can download Sense from https://download.elastic.co/elastic/sense/sense-latest.tar.gz to install it on an offline machine.
+	
+	2.开启Kibana
+	
+	./bin/kibana 
+	
+	Windows:bin\kibana.bat.
+	
+	3.通过以下连接打开sense:http://localhost:5601/app/sense.
