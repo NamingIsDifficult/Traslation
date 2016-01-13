@@ -60,3 +60,38 @@
 	        "match_all": {}
 	    }
 	}
+	
+	只要不是HEAD请求，Elasticsearch都会返回一个HTTP状态吗，如200，并且响应实体是Json格式的。之前的curl请求将会返回如下格式的响应：
+	
+	{
+	    "count" : 0,
+	    "_shards" : {
+	        "total" : 5,
+	        "successful" : 5,
+	        "failed" : 0
+	    }
+	}
+	
+	之所以没有HTTP头部，是因为curl命令中并未要求显示头部信息。如要查看头部信息，需要在curl命令中节加入 -i：
+	
+	curl -i -XGET 'localhost:9200/'
+	
+	本书接下来将会使用curl的简略书写方式，即省略该类请求中相同的部分，比如说域名、端口和curl命令本身。例如：
+	
+	curl -XGET 'localhost:9200/_count?pretty' -d '
+	{
+	    "query": {
+	        "match_all": {}
+	    }
+	}'
+	
+	以上将会书写为：
+	
+	GET /_count
+	{
+	    "query": {
+	        "match_all": {}
+	    }
+	}
+	
+	事实上，这也是Sense控制台使用的格式。
