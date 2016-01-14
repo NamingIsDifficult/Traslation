@@ -41,3 +41,19 @@
 	    "about" :      "I love to go rock climbing",
 	    "interests": [ "sports", "music" ]
 	}
+	
+	需要注意的是 /megacorp/employee/1 这个路径包含了3段信息：
+	
+	megacorp：索引名词
+	
+	employee：类型名词
+	
+	1：特定雇员的Id
+	
+	请求主体，即其中的JSON文档，包含了这个雇员所有的信息。
+	
+	很简单吧！不需要预先做任何管理员式的任务，比如创建一个索引，或者指定每个域中数据的类型。我们可以直接索引一个文档。Elasticsearch
+
+为所有的设置都设定了默认值，所有必要的管理任务都在后台做掉了，如果你不特别的修改它，就会使用默认值。
+
+	
