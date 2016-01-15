@@ -1,0 +1,48 @@
+	接下来会展示一些更加复杂的搜索。比如要查找所有姓Smith但是年龄大于30的雇员，这时需要将查询稍微修改一下，以适应筛选器的格式，使用筛选器
+	
+可以使我们更加有效的执行结构化查询。
+
+	GET /megacorp/employee/_search
+	{
+	    "query" : {
+	        "filtered" : {
+	            "filter" : {
+	                "range" : {
+	                    "age" : { "gt" : 30 } 
+	                }
+	            },
+	            "query" : {
+	                "match" : {
+	                    "last_name" : "smith" 
+	                }
+	            }
+	        }
+	    }
+	}
+	
+	该查询语句的filter部分是一个范围筛选器，将会获取所有年龄大于30的雇员。gt=greater than。
+	
+	query部分与前文的match查询一致。
+	
+	现在不用太担心语法；接下来的章节将会详细的介绍它们。以上查询语句执行的话将会得到这个结果：
+	
+	{
+	   ...
+	   "hits": {
+	      "total":      1,
+	      "max_score":  0.30685282,
+	      "hits": [
+	         {
+	            ...
+	            "_source": {
+	               "first_name":  "Jane",
+	               "last_name":   "Smith",
+	               "age":         32,
+	               "about":       "I like to collect rock albums",
+	               "interests": [ "music" ]
+	            }
+	         }
+	      ]
+	   }
+	}
+	
