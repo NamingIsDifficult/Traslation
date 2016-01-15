@@ -1,0 +1,26 @@
+	现在Elasticsearch里已经有一些数据了，我们可以开始着手做业务需求了。首先要做的是获取单独的雇员的数据。
+	
+	在Elasticsearch中，这很容易。只需要执行一个HTTP GET请求并指定文档的地址（索引/类型/Id）就能获取到相应的数据。返回的是原始的JSON文档。
+	
+	请求： GET /megacorp/employee/1
+	
+	响应中包含了该文档的一些元数据，雇员原本的数据则被存储在_source域中：
+	
+	{
+	  "_index" :   "megacorp",
+	  "_type" :    "employee",
+	  "_id" :      "1",
+	  "_version" : 1,
+	  "found" :    true,
+	  "_source" :  {
+	      "first_name" :  "John",
+	      "last_name" :   "Smith",
+	      "age" :         25,
+	      "about" :       "I love to go rock climbing",
+	      "interests":  [ "sports", "music" ]
+	  }
+	}
+	
+	小贴士：通过把PUT改成GET就可以获取相应的文档，如换成DELETE则会删除它，HEAD可以检查该文档是否存在。如果要替换掉一个已经存在的文档，就
+	
+重新PUT文档到要替换的位置。
