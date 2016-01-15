@@ -1,0 +1,38 @@
+	在一个域中查找单个字没有任何问题，但是，有的时候你会想要匹配确定的词组，比如，我们想要执行一个这样的查询，仅匹配在员工信息中同时包含
+	
+了rock和climbing两个字，并且还是连续出现的，即rock climbing。
+
+	在这里将用一个match方法的小变种match_phrase：
+	
+	GET /megacorp/employee/_search
+	{
+	    "query" : {
+	        "match_phrase" : {
+	            "about" : "rock climbing"
+	        }
+	    }
+	}
+	
+	结果与预期一致：
+	{
+	   ...
+	   "hits": {
+	      "total":      1,
+	      "max_score":  0.23013961,
+	      "hits": [
+	         {
+	            ...
+	            "_score":         0.23013961,
+	            "_source": {
+	               "first_name":  "John",
+	               "last_name":   "Smith",
+	               "age":         25,
+	               "about":       "I love to go rock climbing",
+	               "interests": [ "sports", "music" ]
+	            }
+	         }
+	      ]
+	   }
+	}
+	
+	
