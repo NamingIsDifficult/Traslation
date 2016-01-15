@@ -1,0 +1,100 @@
+	GET请求非常的简单，即获取你请求的文档。接下来试试一些更加高级的东西，比如一次简单的搜索。
+	
+	首先要尝试的是最简单的搜索。搜索所有的雇员，请求如下：
+	
+	GET /megacorp/employee/_search
+	
+	这里使用了之前的megacorp索引和employee类型，然后将前文所用到的路径中的文档id换成了_search终节点(endpoint)。响应中包含了所有的文档
+	
+，文档在hits数组中。默认情况下，一次查询会返回最上层的10个结果。
+
+	{
+	   "took":      6,
+	   "timed_out": false,
+	   "_shards": { ... },
+	   "hits": {
+	      "total":      3,
+	      "max_score":  1,
+	      "hits": [
+	         {
+	            "_index":         "megacorp",
+	            "_type":          "employee",
+	            "_id":            "3",
+	            "_score":         1,
+	            "_source": {
+	               "first_name":  "Douglas",
+	               "last_name":   "Fir",
+	               "age":         35,
+	               "about":       "I like to build cabinets",
+	               "interests": [ "forestry" ]
+	            }
+	         },
+	         {
+	            "_index":         "megacorp",
+	            "_type":          "employee",
+	            "_id":            "1",
+	            "_score":         1,
+	            "_source": {
+	               "first_name":  "John",
+	               "last_name":   "Smith",
+	               "age":         25,
+	               "about":       "I love to go rock climbing",
+	               "interests": [ "sports", "music" ]
+	            }
+	         },
+	         {
+	            "_index":         "megacorp",
+	            "_type":          "employee",
+	            "_id":            "2",
+	            "_score":         1,
+	            "_source": {
+	               "first_name":  "Jane",
+	               "last_name":   "Smith",
+	               "age":         32,
+	               "about":       "I like to collect rock albums",
+	               "interests": [ "music" ]
+	            }
+	         }
+	      ]
+	   }
+	}
+	
+	小贴士：响应不仅仅告诉我们哪些文档被匹配到了，也包含了被匹配到的文档所包含的所有信息。
+	
+	下一步，试试看搜索姓Smith的雇员。要完成这个需求的话，需要使用轻量级的搜索方法，这个方法在命令行中很容易使用。这个方法通常被当作是
+	
+一个查询字符串式的搜索，因为我们将搜索需求当作是URL的查询字符串参数传递的。
+
+	GET /megacorp/employee/_search?q=last_name:Smith
+	
+	同样是使用_search终节点,在末尾添加查询参数q=参数，返回的结果中就包含了所有的姓Smith的人：
+	
+	{
+   ...
+   "hits": {
+      "total":      2,
+      "max_score":  0.30685282,
+      "hits": [
+         {
+            ...
+            "_source": {
+               "first_name":  "John",
+               "last_name":   "Smith",
+               "age":         25,
+               "about":       "I love to go rock climbing",
+               "interests": [ "sports", "music" ]
+            }
+         },
+         {
+            ...
+            "_source": {
+               "first_name":  "Jane",
+               "last_name":   "Smith",
+               "age":         32,
+               "about":       "I like to collect rock albums",
+               "interests": [ "music" ]
+            }
+         }
+      ]
+   }
+}
