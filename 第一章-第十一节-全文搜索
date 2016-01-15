@@ -1,0 +1,57 @@
+	目前为止涉及的搜索都还很简单：单个名字，使用年龄筛选。接下来试试看更为高级的全文搜索功能，这可是传统数据库累到死才能做到的。
+	
+	我们将要搜索出所有喜欢攀岩的雇员：
+	
+	GET /megacorp/employee/_search
+	{
+	    "query" : {
+	        "match" : {
+	            "about" : "rock climbing"
+	        }
+	    }
+	}
+	
+	这里我们使用match查询方法搜索about字段中的 rock climbing。返回了以下结果：
+	{
+	   ...
+	   "hits": {
+	      "total":      2,
+	      "max_score":  0.16273327,
+	      "hits": [
+	         {
+	            ...
+	            "_score":         0.16273327, 
+	            "_source": {
+	               "first_name":  "John",
+	               "last_name":   "Smith",
+	               "age":         25,
+	               "about":       "I love to go rock climbing",
+	               "interests": [ "sports", "music" ]
+	            }
+	         },
+	         {
+	            ...
+	            "_score":         0.016878016, 
+	            "_source": {
+	               "first_name":  "Jane",
+	               "last_name":   "Smith",
+	               "age":         32,
+	               "about":       "I like to collect rock albums",
+	               "interests": [ "music" ]
+	            }
+	         }
+	      ]
+	   }
+	}
+	
+	_score字段代表了文档相应的关联分数。
+	
+	默认情况下，Elasticsearch通过匹配到的文档的关联分数来对文档排序，也就是说，依文档与查询的匹配程度而定。所以hits中的第一项得分最高
+	
+的原因显而易见，因为该文档与查询完全匹配。
+
+	但是，为何还会有第二项？原因在于rock这个词在它的about中也被提及，由于不是完全匹配，所以它的关联分数比较低。
+	
+	这是一个可以说明Elasticsearch如何进行全文搜索并返回最具相关性的文档的不错的例子。关联这个概念在Elasticsearch中是非常重要的，而在传
+	
+统数据库中，它们只能判断是否完全相等。
