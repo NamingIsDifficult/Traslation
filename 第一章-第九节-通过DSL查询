@@ -1,0 +1,16 @@
+	查询字符串搜索是为了方便命令行查询而设的，它有一些限制。Elasticsearch提供了一种丰富、便捷的查询语言DSL,它支持创建更加复杂的查询。
+	
+	DSL(domain-specific)使用JSON作为请求的主体。前文中的搜索用DSL可以表示为：
+	
+	GET /megacorp/employee/_search
+	{
+	    "query" : {
+	        "match" : {
+	            "last_name" : "Smith"
+	        }
+	    }
+	}
+	
+	返回与之前的查询字串搜索是相同的。不过你会发现整个过程中有不少不同的地方，比如不再使用查询字串参数，而是使用一个请求主体。请求主体是
+	
+JSON格式的，并且使用了match作为查询方式。
