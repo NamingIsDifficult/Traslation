@@ -1,0 +1,106 @@
+	最后一项业务需求：支持经理们可以在雇员目录上获取分析报告。Elasticsearch有一个叫aggregations(聚合)的功能，它支持从数据中生成专业的分析报告。与SQL中的GROUP BY的功能很相似，但是相比之下能做的更多。
+	比如，找出雇员最为感兴趣的东西：
+	GET /megacorp/employee/_search
+	{
+	  "aggs": {
+	    "all_interests": {
+	      "terms": { "field": "interests" }
+	    }
+	  }
+	}
+	现在先不要纠结于语法，先看看结果：
+	{
+	   ...
+	   "hits": { ... },
+	   "aggregations": {
+	      "all_interests": {
+	         "buckets": [
+	            {
+	               "key":       "music",
+	               "doc_count": 2
+	            },
+	            {
+	               "key":       "forestry",
+	               "doc_count": 1
+	            },
+	            {
+	               "key":       "sports",
+	               "doc_count": 1
+	            }
+	         ]
+	      }
+	   }
+	}
+	可以看到有2个雇员对音乐感兴趣，1个对森林感兴趣，还有一个队运动感兴趣。这些聚合解雇并不是提前就计算好的；它们是在查询字串匹配到文档后以极快的速度生成的。如果我们想知道叫Smith的人最感兴趣的东西的话，只需要添加合适的查询字串到查询主体中:
+	GET /megacorp/employee/_search
+	{
+	  "query": {
+	    "match": {
+	      "last_name": "smith"
+	    }
+	  },
+	  "aggs": {
+	    "all_interests": {
+	      "terms": {
+	        "field": "interests"
+	      }
+	    }
+	  }
+	}
+	all_interests这个聚合因此就变成了只包含匹配查询条件的文档了。
+	...
+	  "all_interests": {
+	     "buckets": [
+	        {
+	           "key": "music",
+	           "doc_count": 2
+	        },
+	        {
+	           "key": "sports",
+	           "doc_count": 1
+	        }
+	     ]
+	  }
+	聚合运算支持分级汇总。比如说，算出有相同的感兴趣的事情雇员的平均年龄：
+	GET /megacorp/employee/_search
+	{
+	    "aggs" : {
+	        "all_interests" : {
+	            "terms" : { "field" : "interests" },
+	            "aggs" : {
+	                "avg_age" : {
+	                    "avg" : { "field" : "age" }
+	                }
+	            }
+	        }
+	    }
+	}
+	这个聚合运算有点复杂，不过仍旧可以轻松的理解：
+	...
+	  "all_interests": {
+	     "buckets": [
+	        {
+	           "key": "music",
+	           "doc_count": 2,
+	           "avg_age": {
+	              "value": 28.5
+	           }
+	        },
+	        {
+	           "key": "forestry",
+	           "doc_count": 1,
+	           "avg_age": {
+	              "value": 35
+	           }
+	        },
+	        {
+	           "key": "sports",
+	           "doc_count": 1,
+	           "avg_age": {
+	              "value": 25
+	           }
+	        }
+	     ]
+	  }
+	  这个结果与第一次获取结果相比蕴含的信息更加的丰富。在显示了感兴趣的事及文档的数量的同时，还多展示了一个条件，avg_age平均年龄，这是拥有统一兴趣的雇员的平均年龄。
+	  即使你现在还不懂这些语法，你仍旧可以看到复杂的聚合与分组是一种简单的方式被完成的。限制只在于你能获得什么样的数据。
