@@ -1,0 +1,28 @@
+	只运行一个节点就意味着有单点失败的问题，因为没有备用的节点。幸运的是，只需要启动另一个节点就可以规避这个问题。
+	如何启动第二个节点：
+	为了测试当添加第二节点的时候会发生些什么，你可以像启动第一个节点一样启动一个新的节点，并且使用同一个路径，多个节点可以共享相同的路径。
+	当你在同一台机器运行第二节点的时候，它会自动发现并加入具有相同cluster.name的集群，但是，对于在不同机器上运行的节点，你需要配置一个单一传播的列表，包含了可以加入到集群中的节点。
+	在开启了第二个节点后，集群就会是这个样子：
+	Cluster:Node1-*master		Node2
+			P0 P1 P2			R0 R1 R2
+	第二个节点加入了集群中，并且3个复制分片也被分配到其中，每一个对应一个基本分片。这意味着即使任意一个节点失效了，我们的数据仍旧是可用的。
+	任意被索引的新文件首先会被存储到一个基本分片中，然后会被并行的拷贝至关联的那个复制分片中。这保证了文档可以从基本分片和它的任意一个复制分片中获得。
+	现在cluster-health的状态是green，也就是说6个分片都是活跃的。
+	{
+	  "cluster_name": "elasticsearch",
+	  "status": "green", 
+	  "timed_out": false,
+	  "number_of_nodes": 2,
+	  "number_of_data_nodes": 2,
+	  "active_primary_shards": 3,
+	  "active_shards": 6,
+	  "relocating_shards": 0,
+	  "initializing_shards": 0,
+	  "unassigned_shards": 0,
+	  "delayed_unassigned_shards": 0,
+	  "number_of_pending_tasks": 0,
+	  "number_of_in_flight_fetch": 0,
+	  "task_max_waiting_in_queue_millis": 0,
+	  "active_shards_percent_as_number": 100
+	}
+	
