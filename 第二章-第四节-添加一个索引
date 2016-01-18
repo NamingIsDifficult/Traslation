@@ -1,0 +1,39 @@
+	要向Elasticsearch添加数据的话，首先要现有索引，索引是存储相关数据的地方。在实际应用中，一个索引其实是一个逻辑命名空间，它指向一个或多个物理分片。
+	一个分片是一个底层的工作单元，它只包含了索引中数据的一部分。在分片介绍的章节里我们会详细解释。现在我们只需知道一个分片是一个Lucene的实例，并且它本身就是一个完备的搜索引擎。我们的文档都被存储在分片中，并且还被索引了，但是客户端应用并不需要直接和它们通信，而是与索引通信。
+	分片是Elasticsearch将数据分布在集群各个地方的手段，可以将分片想象成数据容器。文档被存储在分片中，分片又被放置在集群中的节点里。当你的集群伸缩的时候，Elasticsearch会自动在节点之间移动分片来使得集群保持平衡。
+	一个分片可以是一个基本分片，也可以是一个复制分片。索引中的每一份文档都归属于一个基本分片，所以基本分片的数量取决于你的索引中所能包含的最大量的数据量是多少。
+	小贴士：一个基本分片在理论上可以包含interger.Max_Value-128个文档，实际应用中的限制取决于具体情况：比如硬件情况、文档大小、索引和查询的方式、返回时间期待值等等。
+	一个复制分片是一个基本分片的拷贝。复制分片被用于提供复数的数据备份来保证当硬件失效的时候数据不会丢失，并且为读请求，比如搜索和获取文档等提供服务。
+	当一个索引被创建的时候，其中的基本分片的数量是确定的，不过复制分片的数量随时可以修改。
+	现在让我们在只有一个空节点集群中创建一个叫blogs的索引。默认情况下，索引会被分配5个基本分片，但为了例子的战士，我们将分配3个基本分片和一个复制分片（每个基本分片都有一个复制分片）。
+	PUT /blogs
+	{
+	   "settings" : {
+	      "number_of_shards" : 3,
+	      "number_of_replicas" : 1
+	   }
+	}
+	现在的集群长相如下：
+	Cluster:Node1-*master
+			P0 P1 P2
+	如果现在使用cluster-health，返回如下：
+	{
+	  "cluster_name": "elasticsearch",
+	  "status": "yellow", 
+	  "timed_out": false,
+	  "number_of_nodes": 1,
+	  "number_of_data_nodes": 1,
+	  "active_primary_shards": 3,
+	  "active_shards": 3,
+	  "relocating_shards": 0,
+	  "initializing_shards": 0,
+	  "unassigned_shards": 3, 
+	  "delayed_unassigned_shards": 0,
+	  "number_of_pending_tasks": 0,
+	  "number_of_in_flight_fetch": 0,
+	  "task_max_waiting_in_queue_millis": 0,
+	  "active_shards_percent_as_number": 50
+	}
+	unassigned_shards：复制分片未被放置到节点中。
+	status是yellow意味着所有的基本分片都在运行，整个集群已经可以正常响应所有的请求了。但同时并不是所有的复制分片都是活跃的。事实上，3个复制分片都处于未分配的状态--它们都还没有被分配到节点中。这是因为在同一个节点中存储相同的数据实在是没有意义，如果这个节点失效的话，所有数据都会丢失。
+	这个情况下，虽然集群可以提供完备的功能，但是还是有丢失数据的风险存在的。
