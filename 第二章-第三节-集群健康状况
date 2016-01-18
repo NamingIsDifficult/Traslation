@@ -1,0 +1,20 @@
+	Elasticsearch集群中的许多统计信息都是可以被监控的，其中以集群的健康状况最是重要，它会报告一个状态字段(status)，有三种情况：green,yellow或者red:
+	GET /_cluster/health
+	在一个没有索引的空集群上，这个命令会返回以下信息：
+	{
+	   "cluster_name":          "elasticsearch",
+	   "status":                "green", 
+	   "timed_out":             false,
+	   "number_of_nodes":       1,
+	   "number_of_data_nodes":  1,
+	   "active_primary_shards": 0,
+	   "active_shards":         0,
+	   "relocating_shards":     0,
+	   "initializing_shards":   0,
+	   "unassigned_shards":     0
+	}
+	status字段提供了集群运转的整体情况，每种颜色的含义如下：
+	green:所有的主要和复制的分片都是活跃的。
+	yellow:所有主要的分片是活跃的，但只有部分复制的分片是活跃的。
+	red:有部分主要的分片是不活跃的。
+	在本章接下来的部分，我们将会解释主要的分片和复制的分片的概念，以及在实际运用中各种颜色蕴含的信息。
