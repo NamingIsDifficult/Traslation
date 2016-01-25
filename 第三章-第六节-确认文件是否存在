@@ -1,0 +1,12 @@
+	如果你只是想确认文档是不是存在的话，那就用HEAD方法来发送请求，它只会返回HTTP头部：
+	curl -i -XHEAD http://localhost:9200/website/blog/123
+	如果文档存在的话，Elasticsearch将会返回状态200:
+	HTTP/1.1 200 OK
+	Content-Type: text/plain; charset=UTF-8
+	Content-Length: 0
+	反之则是404：
+	curl -i -XHEAD http://localhost:9200/website/blog/124
+	HTTP/1.1 404 Not Found
+	Content-Type: text/plain; charset=UTF-8
+	Content-Length: 0
+	当然，你现在检查发现文档不在并不意味着之后它也不再，另一个进程可能刚好创建了文档。
