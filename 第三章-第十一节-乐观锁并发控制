@@ -1,0 +1,81 @@
+	Elasticsearch是分布式的。当文档被创建、更新、删除的时候，新的文档版本必须被复制到集群的其他节点上。Elasticsearch也是异步和并发的，意味着这些复制分发的请求是平行发送的，可能以不同的顺序抵达目的地。Elasticsearch需要一个方法来保证就得文档版本不会覆盖新的文档版本。
+	之前当我们讨论index,get和delete请求的时候，我们指出每一个文档都有一个_version字段，这个字段在每次修改文档的时候都会递增。Elasticsearch通过这个字段来保证变更都是照着正确的顺序生效的。如果一个旧版本的文档在一个新版本的文档之后到达的话，直接无视就好了。
+	我们通过利用_version字段来保证有冲突的变更不会导致数据丢失，我们通过指定想要改变的文档的version的数值来达成这个目标。如果版本已经不是最新的话，请求就会失败。
+	首先先创建一个文档：
+	PUT /website/blog/1/_create
+	{
+	  "title": "My first blog entry",
+	  "text":  "Just trying this out..."
+	}
+	通过响应可以知道最初被创建的文档的_version字段的值是1.现在想象一下如果我们要编辑文档：我们把它的数据载入到网页中，修改，然后再保存到新版本中。
+	首先先获取文档：
+	GET /website/blog/1
+	响应中的_version字段还是1：
+	{
+	  "_index" :   "website",
+	  "_type" :    "blog",
+	  "_id" :      "1",
+	  "_version" : 1,
+	  "found" :    true,
+	  "_source" :  {
+	      "title": "My first blog entry",
+	      "text":  "Just trying this out..."
+	  }
+	}
+	现在，当我们试着要通过重新索引文档来保存变更的时候，我们制定了变更将会生效的版本：
+	PUT /website/blog/1?version=1 
+	{
+	  "title": "My first blog entry",
+	  "text":  "Starting to get the hang of this..."
+	}
+	我们希望只有当当前的文档版本是1的时候，这个更新才会成功。
+	这个请求成功了，并且响应的实体告诉我们现在的版本已经是2了。
+	{
+	  "_index":   "website",
+	  "_type":    "blog",
+	  "_id":      "1",
+	  "_version": 2
+	  "created":  false
+	}
+	但是，如果我们重新运行相同的重新索引的请求，仍旧将version指定为1的话，Elasticsearch将会返回409 Conflict状态码，并且返回如下实体：
+	{
+	  "error" : "VersionConflictEngineException[[website][2] [blog][1]:
+	             version conflict, current [2], provided [1]]",
+	  "status" : 409
+	}
+	这个结果告诉我们当前的版本是2，而请求指定的是更新版本1.
+	我们现在要怎么做取决于应用本身的需求。我们可以告诉用户有人已经对文档做了修改，在修改前请先查询已有的改动。或者，就像之前举的工具数量的例子，我们可以获取到最新的文档，然后尝试着再更新一次。
+	所有更新或者删除的API都支持version参数，这使得你可以在代码中选择在合适的地方应用乐观锁来控制并发。
+	一个常用的选择是使用其他的数据库来作为数据的存储介质，然后使用Elasticsearch来保证数据可以被搜索，这意味着作为存储介质的数据库中所有的变更都要在发生的时候拷贝到Elasticsearch中，如果有许多个进程负责对数据进行同步的话，你可能会向之前描述的那样陷入并发的问题中。
+	如果你的数据库中已经有了版本号，或者是时间戳之类类似版本控制的东西的话，你可以通过在查询字串中添加version_type=external参数来复用这些字段。版本号必须是大于0小鱼9.2e+18的整数。在java中即是一个Long型的值。
+	外部版本号的处理方式和内部版本号的处理方式稍有不同，与比对指定的版本号和实际版本号是否相同相比，Elasticsearch将会比较当前版本是否比指定版本小。如果请求成功了，外部版本号将会被存储为最新的版本号。
+	外部版本号不单单在index和delete的时候可以用，在create的时候也能使用。
+	比如，要创建一个版本号为的新文档，请求如下：
+	PUT /website/blog/2?version=5&version_type=external
+	{
+	  "title": "My first external blog entry",
+	  "text":  "Starting to get the hang of this..."
+	}
+	从响应中可以看到当前的版本号为5：
+	{
+	  "_index":   "website",
+	  "_type":    "blog",
+	  "_id":      "2",
+	  "_version": 5,
+	  "created":  true
+	}
+	现在我们将文档的版本号更新为10：
+	PUT /website/blog/2?version=10&version_type=external
+	{
+	  "title": "My first external blog entry",
+	  "text":  "This is a piece of cake..."
+	}
+	请求成功后，响应显示版本号更新为10：
+	{
+	  "_index":   "website",
+	  "_type":    "blog",
+	  "_id":      "2",
+	  "_version": 10,
+	  "created":  false
+	}
+	如果重新运行这个请求，它会因为之前提到的冲突而失败，因为指定的版本号不大于当前的版本号。
