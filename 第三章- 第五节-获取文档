@@ -1,0 +1,52 @@
+	要从Elasticsearch中获取文档，请求如下：
+	GET /website/blog/123?pretty
+	响应包含目前熟悉的一些元数据元素，加上_source字段，其中包含了文档的JSON原始数据：
+	{
+	  "_index" :   "website",
+	  "_type" :    "blog",
+	  "_id" :      "123",
+	  "_version" : 1,
+	  "found" :    true,
+	  "_source" :  {
+	      "title": "My first blog entry",
+	      "text":  "Just trying this out...",
+	      "date":  "2014/01/01"
+	  }
+	}
+	小贴士：在任意请求后面添加url参数pretty，如前所示，Elasticsearch将会以JSON响应的格式来使得响应可读性提高。但_source这个字段却不是以固定的格式返回的，它取决于放进去的时候是什么样的。
+	GET请求的响应包含了{"found":true}。这表示请求文档被找到了，如果该文档不存在的话，我们依旧会获得类似的响应jSON，只不过found字段会是false。
+	同样，HTTP响应的代码将会是404而不是200，我们可以通过在curl中加入-i参数来查看这些，请求如下：
+	curl -i -XGET http://localhost:9200/website/blog/124?pretty
+	响应如下：
+	HTTP/1.1 404 Not Found
+	Content-Type: application/json; charset=UTF-8
+	Content-Length: 83
+	
+	{
+	  "_index" : "website",
+	  "_type" :  "blog",
+	  "_id" :    "124",
+	  "found" :  false
+	}
+	默认情况下，GET请求会返回整个文档，并存在_source字段中。但是或许你只对其中的title字段感兴趣，单独的字段可以通过_source参数来请求，多个字段可以通过都好分隔：
+	GET /website/blog/123?_source=title,text
+	响应中_source现在只包含了请求中的字段：
+	{
+	  "_index" :   "website",
+	  "_type" :    "blog",
+	  "_id" :      "123",
+	  "_version" : 1,
+	  "exists" :   true,
+	  "_source" : {
+	      "title": "My first blog entry" ,
+	      "text":  "Just trying this out..."
+	  }
+	}
+	如果你只要文档而不要其它的元数据，请求如下：
+	GET /website/blog/123/_source
+	返回中将会只有文档的JSON
+	{
+	   "title": "My first blog entry",
+	   "text":  "Just trying this out...",
+	   "date":  "2014/01/01"
+	}
