@@ -1,0 +1,20 @@
+	我们怎样才能确认当索引一个文件时，是在创建一个全新的文档而不是重写一个已存在的文档呢？
+	请记住，_index+_type+_id的组合唯一标识了一个文档。所以确认的最简单的方法就是让Elasticsearch自动生成一个_id，使用POST版本的索引请求。
+	
+	POST /website/blog/
+	{ ... }
+	
+	但是，如果我们想用的_id已经被占用了，那么就必须告诉Elasticsearch它只能接受这样的索引请求：拥有相同的_index,_type,_id的文档不存在。这是两种确认的方法，效果是一样的，你觉得哪个方便就用哪个。
+	第一个方法需要使用op_type参数：
+	PUT /website/blog/123?op_type=create
+	{ ... }
+	第二个方法则需在URL终结点后添加/_create:
+	PUT /website/blog/123/_create
+	{ ... }
+	如果这个创建新文档的请求成功了，Elasticsearch会返回哟用的元数据和HTTP响应代码201（created）。
+	另外，如果一个有相同_index,_type,_id的文档已经存在了，那么Elasticsearch会返回409 (conflict)响应代码，并且附带错误信息：
+	{
+	  "error" : "DocumentAlreadyExistsException[[website][4] [blog][123]:
+	             document already exists]",
+	  "status" : 409
+	}
