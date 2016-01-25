@@ -1,0 +1,40 @@
+	通过index API，文档被索引、被存储以使之可以被搜索。但首先，我们需要先决定在哪里存储文档，如前文所言，一个文档的_index,_type和_id可以唯一标志一个文档。我们可以提供自己定义的_id，也可以让index API生成一个。
+	如果你的文档有一个天然的标识符，比如用户账号这个字段或者其它的字段值，那建议提供自有的_id，API的格式如下：
+	PUT /{index}/{type}/{id}
+	{
+	  "field": "value",
+	  ...
+	}
+	比如，如果index的名称是website，type的名称是blog，ID是123,那么索引请求就是这样的：
+	PUT /website/blog/123
+	{
+	  "title": "My first blog entry",
+	  "text":  "Just trying this out...",
+	  "date":  "2014/01/01"
+	}
+	Elasticsearch的响应如下：
+	{
+	   "_index":    "website",
+	   "_type":     "blog",
+	   "_id":       "123",
+	   "_version":  1,
+	   "created":   true
+	}
+	响应展示了索引请求执行成功，它创建并包含了_index、_type、_id等元数据，以及新的元素:_version。
+	在Elasticsearch中每一个文档都有版本号。每当一个文档被修改的时候，包括删除，_version的数字就会增长。在处理冲突一节中将会详细介绍如何使用这个元素来保证你的应用不会重写已被修改的过的文档。
+	如果数据本身不具备唯一标识符，那么就让Elasticsearch自动生成一个。请求的结构将会修改为：
+	POST /website/blog/
+	{
+	  "title": "My second blog entry",
+	  "text":  "Still trying this out...",
+	  "date":  "2014/01/01"
+	}
+	响应如下：
+	{
+	   "_index":    "website",
+	   "_type":     "blog",
+	   "_id":       "AVFgSgVHUP18jI2wRx0w",
+	   "_version":  1,
+	   "created":   true
+	}
+	自动生成的ID有20个字符，是Base64编码的全球唯一标识符UUID.
