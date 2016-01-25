@@ -1,0 +1,20 @@
+	删除文档的API模式和之前的基本一致，除了HTTP方法不一样：
+	DELETE /website/blog/123
+	如果文档被找到了，Elasticsearch会返回200的状态吗并且附加如下的响应实体（请注意_version字段被增加了）:
+	{
+	  "found" :    true,
+	  "_index" :   "website",
+	  "_type" :    "blog",
+	  "_id" :      "123",
+	  "_version" : 3
+	}
+	如果文档不存在的话，则会返回404和相应的响应（请注意_version字段被增加了）：
+	{
+	  "found" :    false,
+	  "_index" :   "website",
+	  "_type" :    "blog",
+	  "_id" :      "123",
+	  "_version" : 4
+	}
+	即使文档不存在，_version字段也被增加了，这是一种内部记录的方式，它保证多个节点以正确的顺序完成相应的操作。
+	小贴士：之前已经提到过，删除文档并不会马上把文档从硬盘上删掉；它只是被标记为已删除。随着你索引越来越多的文件，Elasticsearch会在后台清理它们。
