@@ -1,0 +1,23 @@
+	Elasticsearch中的文档是不可变的；我们不能交换他们而是通过更新一个已存在的文档来实现修改，然后重新索引或是替换掉它，使用的命令与之前提到的索引文件所用的index API一样：
+	PUT /website/blog/123
+	{
+	  "title": "My first blog entry",
+	  "text":  "I am starting to get the hang of this...",
+	  "date":  "2014/01/02"
+	}
+	在响应中，我们可以看到Elasticsearch已经将_version字段的值增加了：
+	{
+	  "_index" :   "website",
+	  "_type" :    "blog",
+	  "_id" :      "123",
+	  "_version" : 2,
+	  "created":   false 
+	}
+	created 标志也被置成false。因为一个有相同的文档已经存在了。
+	在Elasticsearch内部，旧的文档被标记成已删除的，并且添加了一个全新的文档。就版本的文档并不会马上消失，即便你已经无法从外部访问它了。在你不断的索引文件的过程中，Elasticsearch在后台将已删除的文档清除掉。
+	在本章的后面，我们将会介绍update API,它提供局部更新的能力。这个API表现的似乎是在修改已有文档，其实Elasticsearch是按照和之前提到的流程相同的步骤处理的：
+	1.从旧文档中获取JSON数据。
+	2.修改它。
+	3.删除旧的文档。
+	4.索引一个新的文件。
+	唯一的不同是，update API通过一个客户端请求就达成了修改的目的，而不是通过get和index两次请求。
