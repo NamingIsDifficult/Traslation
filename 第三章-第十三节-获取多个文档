@@ -1,0 +1,81 @@
+	将多个请求合并到一起可以避免因为单独的执行每个请求而产生的过多的网络开销。如果你知道要从Elasticsearch中获取多个文档的话，通过使用multi-get，或是mget API 这种单个的请求来获取它们将会比一个一个的获取文档更加的快速。
+	mget API 需求一个docs数组作为参数，其中的每个元素都要指定想要获取的文档的_index,_type和_id元数据。如果你只是想获取一个或者多个指定的字段的话，你也可以指定一个_source参数：
+	GET /_mget
+	{
+	   "docs" : [
+	      {
+	         "_index" : "website",
+	         "_type" :  "blog",
+	         "_id" :    2
+	      },
+	      {
+	         "_index" : "website",
+	         "_type" :  "pageviews",
+	         "_id" :    1,
+	         "_source": "views"
+	      }
+	   ]
+	}
+	响应的实体也包含了一个docs数组，其中包含了每个文档对应的响应，和请求中的顺序相同。每个响应和单独请求获取一个文档时的响应是一样的。
+	{
+	   "docs" : [
+	      {
+	         "_index" :   "website",
+	         "_id" :      "2",
+	         "_type" :    "blog",
+	         "found" :    true,
+	         "_source" : {
+	            "text" :  "This is a piece of cake...",
+	            "title" : "My first external blog entry"
+	         },
+	         "_version" : 10
+	      },
+	      {
+	         "_index" :   "website",
+	         "_id" :      "1",
+	         "_type" :    "pageviews",
+	         "found" :    true,
+	         "_version" : 2,
+	         "_source" : {
+	            "views" : 2
+	         }
+	      }
+	   ]
+	}
+	如果你想要获取的文档都在同一个_index里面，或者甚至是在同一个_type里面的话，你可以在Url里指定一个默认的/_index或是/_index/_type,你可以在请求里重写这些值:
+	GET /website/blog/_mget
+	{
+	   "docs" : [
+	      { "_id" : 2 },
+	      { "_type" : "pageviews", "_id" :   1 }
+	   ]
+	}
+	实际上，如果所有的文档都有相同的索引和类型的话，只要将一组id作为参数发送就可以了：
+	GET /website/blog/_mget
+	{
+	   "ids" : [ "2", "1" ]
+	}
+	注意第二个被请求的文档是不存在的。我们指定了blog类型，但是id 1 所对应的文档的类型是pageviews。这个不存在的信息会在响应中报告：
+	{
+	  "docs" : [
+	    {
+	      "_index" :   "website",
+	      "_type" :    "blog",
+	      "_id" :      "2",
+	      "_version" : 10,
+	      "found" :    true,
+	      "_source" : {
+	        "title":   "My first external blog entry",
+	        "text":    "This is a piece of cake..."
+	      }
+	    },
+	    {
+	      "_index" :   "website",
+	      "_type" :    "blog",
+	      "_id" :      "1",
+	      "found" :    false  
+	    }
+	  ]
+	}
+	第二个文档未找到的情况不会影响获取第一个文档。每个文档都是单独被获取和报告的。
+	小贴士：http状态码是200，即使有一个文档没有被找到。事实上，即使一个文档都没有找到，状态码也是200，因为mget这个请求本身是成功的。要查看单个文档是否获取成功要看found这个标识位。
