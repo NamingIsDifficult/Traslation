@@ -39,5 +39,56 @@
 	所以在1.3.8和1.4.3，1.5.0和更新的版本中，它都不再作为默认的脚本工具。你可以通过设置config/elasticsearch.yml中的配置来禁止Groovy，
 	script.groovy.sandbox.enabled: false
 	这个命令会关闭Groovy沙盒，这样就能防止动态Groovy脚本被作为请求的一部分被接受，或者通过特定的.scripts索引被获取。你依旧可以使用Groovy脚本在每个节点的config/scripts/路径中存储文件。
-	如果你的架构和安全要求并不在意这个漏洞的胡ua，比如说节点只会暴露给可信的应用，那么如果你需要动态脚本的特性的话，就可以重新激活对动态脚本的支持。
-	
+	如果你的架构和安全要求并不在意这个漏洞的话，比如说节点只会暴露给可信的应用，那么如果你需要动态脚本的特性的话，就可以重新激活对动态脚本的支持。
+	我们可以使用脚本来给tags数组字段添加一个tag。在这个例子中我们将新的tag指定为参数，而不是将至硬编码到脚本里。这使得Elasticsearch可以重用这个脚本，而不用每次新增一个tag的时候都要重新编译一份脚本。
+	POST /website/blog/1/_update
+	{
+	   "script" : "ctx._source.tags+=new_tag",
+	   "params" : {
+	      "new_tag" : "search"
+	   }
+	}
+	获取文档后响应显示了最近的两次请求的效果：
+	{
+	   "_index":    "website",
+	   "_type":     "blog",
+	   "_id":       "1",
+	   "_version":  5,
+	   "found":     true,
+	   "_source": {
+	      "title":  "My first blog entry",
+	      "text":   "Starting to get the hang of this...",
+	      "tags":  ["testing", "search"], 
+	      "views":  1 
+	   }
+	}
+	我们甚至可以通过设置ctx.op为delete来删除有特定内容的文档：
+	POST /website/blog/1/_update
+	{
+	   "script" : "ctx.op = ctx._source.views == count ? 'delete' : 'none'",
+	    "params" : {
+	        "count": 1
+	    }
+	}
+	假设我们需要在Elasticsearch中存储一个页面浏览数的计数器。每次用户访问页面的时候，就将对应页面的计数器加一。但如果是新的页面，我们就不能保证计数器是不是已经存在了。如果我们尝试着去更新不存在的文档，请求会失败。
+	这种情况下，我们可以使用upsert参数来指定当文档不存在的时候就创建一个。
+	POST /website/pageviews/1/_update
+	{
+	   "script" : "ctx._source.views+=1",
+	   "upsert": {
+	       "views": 1
+	   }
+	}
+	第一次运行这个请求的时候，upsert的值被索引为新的文档，将views字段初始化为1.接下来在运行的话，文档就已经存在了，所以更新脚本就被执行了，将views计数器加一。
+	在本节的介绍中，我们说过额获取和重新索引之间的间隔越小，冲突的几率就越小。但它并不能完全消除冲突的可能性。依旧有这样的可能，另一个进程可能在一个请求的update动作之前将文档修改了。
+	为了避免丢失数据，update API在获取文档阶段获取当前的_version字段，如果另外一个进程在这个过程中间修改了文档，那么版本号就会不匹配，更新请求就会失败。
+	对于局部更新的许多使用场景中，文档是否改变并没有关系，举例来说，如果两个进程同时在更新浏览数计数器，哪个先执行并没有什么关系；如果有冲突出现，唯一需要做的就是重新更新一下。
+	这可以通过设置retry_on_confilict参数来使重试过程自动化，默认是0：
+	POST /website/pageviews/1/_update?retry_on_conflict=5 
+	{
+	   "script" : "ctx._source.views+=1",
+	   "upsert": {
+	       "views": 0
+	   }
+	}
+	这种设置对于像更新计数器之类的操作很有效，因为增长的顺序并不重要，但是在一些场景中，顺序执行是非常重要的。就像index API，update API默认使用最近一次写入为准的策略，但是它也接受版本号作为参数，使得乐观锁控制并发成为可能。
