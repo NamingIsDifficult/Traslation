@@ -1,0 +1,43 @@
+	在更新整个文档一节中，我们阐述了更新一个文档的流程是先获取，再修改，再索引。不过呢，通过使用update API，我们可以在一个请求里就完成类似将计数器加一的局部更新操作。
+	我们也谈到文档是不可变的：它们不能被修改，只能被替换。update API也遵循相同的规则。在外部来看，就好像是在局部更新文档一样。实际上，在内部实现过程中，update API也是使用规定的流程更新一个文档。区别在于，这个进程在一个分片内完成了所有的操作，这样就避免了网络中产生过多的请求。通过减少获取和重新索引之间的时间，也可以减少并发导致的冲突。
+	最简单的update请求接受一部分文档作为doc参数随请求发送，这部分会和已存在的文档合并。对象会合并在一起，已存在的重复字段会被覆盖，新的字段会被添加。举个例子，可以通过以下请求来添加两个新的字段：
+	POST /website/blog/1/_update
+	{
+	   "doc" : {
+	      "tags" : [ "testing" ],
+	      "views": 0
+	   }
+	}
+	如果请求成功，响应和index请求很相似：
+	{
+	   "_index" :   "website",
+	   "_id" :      "1",
+	   "_type" :    "blog",
+	   "_version" : 3
+	}
+	获取到的文档展示已经被更新了的_source字段：
+	{
+	   "_index":    "website",
+	   "_type":     "blog",
+	   "_id":       "1",
+	   "_version":  3,
+	   "found":     true,
+	   "_source": {
+	      "title":  "My first blog entry",
+	      "text":   "Starting to get the hang of this...",
+	      "tags": [ "testing" ], 
+	      "views":  0 
+	   }
+	}
+	可以在update API中使用脚本来修改_source字段的内容which is referred to inside an update script as ctx._source（翻译不能-_-）,举例来说，我们可以使用脚本来增加之前添加的博客中的views字段的值。
+	POST /website/blog/1/_update
+	{
+	   "script" : "ctx._source.views+=1"
+	}
+	慢慢的API好像不太够用了，Elasticsearch支持通过脚本自定义逻辑。在许多API中都支持脚本，比如搜索、排序、聚合及文档更新。脚本可以作为请求的一部分一起被发送，脚本可以从特定的.script索引中获取或是从硬盘中加载。
+	默认的写脚本用的工具是Groovy，这是一种快速的表达能力很强的脚本语言，和JavaScript的语法类似。它在Elasticsearch1.3.0的版本中被首次运行在沙盒中，但是有一个漏洞，攻击者可以在用户运行Elasticsearch的时候通过Groovy脚本引擎来构建脚本跳出沙盒并且执行shell命令。
+	所以在1.3.8和1.4.3，1.5.0和更新的版本中，它都不再作为默认的脚本工具。你可以通过设置config/elasticsearch.yml中的配置来禁止Groovy，
+	script.groovy.sandbox.enabled: false
+	这个命令会关闭Groovy沙盒，这样就能防止动态Groovy脚本被作为请求的一部分被接受，或者通过特定的.scripts索引被获取。你依旧可以使用Groovy脚本在每个节点的config/scripts/路径中存储文件。
+	如果你的架构和安全要求并不在意这个漏洞的胡ua，比如说节点只会暴露给可信的应用，那么如果你需要动态脚本的特性的话，就可以重新激活对动态脚本的支持。
+	
