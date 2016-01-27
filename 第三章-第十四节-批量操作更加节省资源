@@ -1,0 +1,115 @@
+	和mget支持获取多个文档相似的bulk API支持将多个create,index,update,delete请求在一次请求内发送。这种命令在需要将一个像日志事件之类的排着长队并且需要批量索引的数据流进行索引的时候特别有用。
+	bulk请求的实体如下，其模板稍有不同：
+	{ action: { metadata }}\n
+	{ request body        }\n
+	{ action: { metadata }}\n
+	{ request body        }\n
+	...
+	这种模板是由多个只有一行的标准的JSON文档通过\n换行符连接到一起的，有两点需要注意的：
+	每一行都必须用换行符\n结尾，即使是最后一行也一样。这是用来作行分割操作的分割符的。
+	行中的数据不能包含未被编码的换行符，因为它们会干扰到解析。这意味着JSON不能被以标准的格式打印出来。
+	action/metadata这一行指定了对哪个文档做哪种操作。
+	action必须是以下几种之一：
+	create:
+	index:
+	update:
+	delete:
+	元数据中需要指定将要被操作的文档的_index,_type和_id。举例来说，一个删除操作的格式如下：
+	{ "delete": { "_index": "website", "_type": "blog", "_id": "123" }}
+	request body这一行中由文档的_source本身组成--即文档中的字段和值。它只有在index和create操作时才会有意义：索引前要先提供文档。
+	update操作也需要这个，并且要由将要发送给update API的数据实体一样，其中要包含：doc,upsert,script等等，删除操作是不需要request body的。
+	{ "create":  { "_index": "website", "_type": "blog", "_id": "123" }}
+	{ "title":    "My first blog post" }
+	如果没有指定id的话，Elasticsearch会自动生成一个：
+	{ "index": { "_index": "website", "_type": "blog" }}
+	{ "title":    "My second blog post" }
+	将所有的片段组合起来，就成了以下这个复杂的bulk请求：
+	POST /_bulk
+	{ "delete": { "_index": "website", "_type": "blog", "_id": "123" }} 
+	{ "create": { "_index": "website", "_type": "blog", "_id": "123" }}
+	{ "title":    "My first blog post" }
+	{ "index":  { "_index": "website", "_type": "blog" }}
+	{ "title":    "My second blog post" }
+	{ "update": { "_index": "website", "_type": "blog", "_id": "123", "_retry_on_conflict" : 3} }
+	{ "doc" : {"title" : "My updated blog post"} } 
+	请注意，delete操作没有request body，下一个操作直接跟在它后面。
+	注意在每一行后面添加换行符。
+	Elasticsearch的响应中包含了items数组，其中列出了每个请求的结果，并且和请求的顺序一致：
+	{
+	   "took": 4,
+	   "errors": false, 
+	   "items": [
+	      {  "delete": {
+	            "_index":   "website",
+	            "_type":    "blog",
+	            "_id":      "123",
+	            "_version": 2,
+	            "status":   200,
+	            "found":    true
+	      }},
+	      {  "create": {
+	            "_index":   "website",
+	            "_type":    "blog",
+	            "_id":      "123",
+	            "_version": 3,
+	            "status":   201
+	      }},
+	      {  "create": {
+	            "_index":   "website",
+	            "_type":    "blog",
+	            "_id":      "EiwfApScQiiy7TIKFxRCTw",
+	            "_version": 1,
+	            "status":   201
+	      }},
+	      {  "update": {
+	            "_index":   "website",
+	            "_type":    "blog",
+	            "_id":      "123",
+	            "_version": 4,
+	            "status":   200
+	      }}
+	   ]
+	}
+	每一个子请求都会被立刻执行，所以其中一个请求执行失败并不会影响到其它的请求，只会将最顶部的error标识位置成true,并且在相应的请求的返回值里报告错误的详细信息。
+	POST /_bulk
+	{ "create": { "_index": "website", "_type": "blog", "_id": "123" }}
+	{ "title":    "Cannot create - it already exists" }
+	{ "index":  { "_index": "website", "_type": "blog", "_id": "123" }}
+	{ "title":    "But we can update it" }
+	在响应中可以看到create文档123因为文档已存在而失败了，但是子请求对同一个文档的索引请求依旧成功了。
+	{
+	   "took": 3,
+	   "errors": true, //至少有一个失败了
+	   "items": [
+	      {  "create": {
+	            "_index":   "website",
+	            "_type":    "blog",
+	            "_id":      "123",
+	            "status":   409, 
+	            "error":    "DocumentAlreadyExistsException 
+	                        [[website][4] [blog][123]:
+	                        document already exists]"
+	      }},
+	      {  "index": {
+	            "_index":   "website",
+	            "_type":    "blog",
+	            "_id":      "123",
+	            "_version": 5,
+	            "status":   200 
+	      }}
+	   ]
+	}
+	这也说明bulk命令不是原子性的：所以这个命令不能被用来实现事务。每个请求都被分开执行，所以任意一个请求成功或是失败不会影响到其它请求。
+	可能你正在将日志数据批量索引到同一个index，同一个type，在每个文档中都指定相同的元数据实在是太浪费，和mget API一样，bulk请求Url也接受默认的/_index或/_index/_type参数：
+	POST /website/_bulk
+	{ "index": { "_type": "log" }}
+	{ "event": "User logged in" }
+	你仍然可以在元数据行重写_index和_type，但是默认情况下还是会使用Url里指定的值。
+	POST /website/log/_bulk
+	{ "index": {}}
+	{ "event": "User logged in" }
+	{ "index": { "_type": "blog" }}
+	{ "title": "Overriding the default type" }
+	整个bulk请求需要被加载到节点的内存中来接收请求，所以这个请求越大，给其它请求留下的内存就越少。bulk请求有一个临界大小的值，超过这个大小，性能不升反降。然而这个临界值并不是固定的，它取决于你的硬件条件，文档大小和复杂度，以及当前的服务器负载。
+	幸运的是，可以很容易的找到这个临界值：不断的增加批量索引的文档大小，当性能开始下降的时候就说明批量执行的大小太大了，比较合适的开始数量是1000-5000，如果文档本身很大的话，就把批量数量定的再小一点。
+	通常情况下，都要一直关注批量请求的物理大小，一千个1kb大小的文档和一千个1mb大小的文档是完全不一样的，大小的经验值大概在5-15Mb的样子。
