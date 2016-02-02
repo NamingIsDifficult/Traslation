@@ -1,0 +1,9 @@
+	search API有两种形式:一个'lite'形式的查询字串版本需要将所有的参数都在查询字串中传递，而完整的请求实体版本则需要一个JSON格式的请求实体并且使用结构化查询语句。
+	通过查询字串搜索对于通过命令行来运行的查询很有用，比如说以下请求可以找出所有类型为tweet并且tweet字段包含单词elasticsearch:
+	GET /_all/tweet/_search?q=tweet:elasticsearch
+	接下来的查询则是为了查找name字段中的john和tweet字段中的mary，实际的查询如下:
+	 GET /_all/tweet/_search?q=+name:john+tweet:mary
+	但是由于编码的需要，它会被转码为严格的格式如下：
+	GET /_search?q=%2Bname%3Ajohn+%2Btweet%3Amary
+	+这个前缀必须要有，这样才能匹配到相应的条件。同样的-这个符号表示不能匹配的条件。这些条件匹配的越多，关联程度就越高。
+	this section is not completely translated,please refer to https://www.elastic.co/guide/en/elasticsearch/guide/current/search-lite.html to see the details
