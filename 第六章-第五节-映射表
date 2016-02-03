@@ -1,0 +1,129 @@
+	为了能将将日期字段识别为是日期，数字字段识别为是数字，字串字段识别为是全文本或是字符串，Elasticsearch需要知道每个字段中包含的数据的类型，这些信息包含在映射表中。
+	如前文所介绍，每个文档在索引中都有类型，每个类型都有它自己的映射表，或者目录定义。映射表定义了类型中有哪些字段，字段又都是哪些数据类型，以及这些数据要如何被Elasticsearch操作。映射表也被用于配置与类型相关的元数据。
+	我们在类型和映射表中讨论详细的内容，这一节只看一些必要的知识。
+	Elasticsearch支持一下几种核心基本类型：
+	字串：string
+	数字：byte,short,integer,long
+	浮点数：float,double
+	布尔：boolean
+	日期：date
+	当你为一个文档添加了之前没有的字段并且索引的时候，Elasticsearch会使用动态映射表并通过JSON的基本类型来猜测字段的类型,规则如下：
+	JSON type								Field type
+	
+	Boolean: true or false					boolean
+	
+	Whole number: 123						long
+	
+	Floating point: 123.45					double
+	
+	String, valid date: 2014-09-15			date
+	
+	String: foo bar							string
+	
+	也就是说，如果你通过括弧来索引一个数字的话，他会被当作是字符串类型，而不long类型。但是，如果字段已经被映射为long类型的话，Elasticsearch会尝试着将字符串转换为long，并且在转换失败的时候抛出异常。
+	我们可以通过使用/_mapping终结点来在Elasticsearch中查看索引中的一个多个类型的映射表：
+	GET /gb/_mapping/tweet
+	响应会展示当我们索引文档的时候Elasticsearch为每个字段动态生成的映射表：
+	{
+	   "gb": {
+	      "mappings": {
+	         "tweet": {
+	            "properties": {
+	               "date": {
+	                  "type": "date",
+	                  "format": "strict_date_optional_time||epoch_millis"
+	               },
+	               "name": {
+	                  "type": "string"
+	               },
+	               "tweet": {
+	                  "type": "string"
+	               },
+	               "user_id": {
+	                  "type": "long"
+	               }
+	            }
+	         }
+	      }
+	   }
+	}
+	不正确的映射表，比如说有奖年龄映射为字串类型而不是自然数类型的，可能会使你的查询结果无法看懂。如果不确定是否映射正确，就查看一下。
+	基本数据类型在大多数情况下都是足够用的，不过你可能会有为特定字段自定义映射的需求，尤其是字符串字段。自定义映射有这些作用：
+	1：在全文本字串字段和精确字符串字段之间再做区分。
+	2：使用特定语言分析器
+	3：为一个字段的局部匹配做优化
+	4：指定自定义日期格式
+	5：还有更多的好处
+	一个字段最重要的特性就是类型。除了字符串字段外，映射通常需要的属性只有type。
+	{
+	    "number_of_clicks": {
+	        "type": "integer"
+	    }
+	}
+	string类型的字段默认情况下会被认为是包含全文本的。也就是说它们的值会在索引前被分析器分析，并且搜索全文本的查询字串也会在搜索前经过相同的分析器。
+	string类型的字段的映射表中有两个最重要的特性，那就是index和analyzer。
+	index特性控制这个字串的索引方式，它可以包含以下三种值中的一个：
+	analyzed:首先分析字串，然后在索引它。换句话说，将字段按照全文本索引。
+	not_analyzed:索引字段，这样才能使之可以被搜索，但是是将它精确的值作为索引，不做分析。
+	no:没有索引此字段，所以无法被搜索。
+	string字段默认的index值是analyzed。入股我们想要将字段映射为精确值的话，需要将index设置为not_analyzed：
+	{
+	    "tag": {
+	        "type":     "string",
+	        "index":    "not_analyzed"
+	    }
+	}
+	其它基本类型，比如long,double,date等也接受index参数,但是可选值只有no和not_analyzed，因为它们的值从来都没有被分析过。
+	对于已被分析过的string字段，使用analyzer特性来指定在搜索阶段和索引阶段要使用何种分析器。默认情况下使用基本分析器，但是可以通过指定一个内置的分析器来修改设置，比如空格分析器，简单分析器或是英语分析器：
+	{
+	    "tweet": {
+	        "type":     "string",
+	        "analyzer": "english"
+	    }
+	}
+	自定义分析器将会在后面的章节详细描述。
+	你可以在第一次创建一个索引的时候指定一个类型的映射表。也可以向一个新的类型添加映射表，或是更新已有类型的映射表，方法是使用/_mapping终结点。
+	虽然你可以向一个已有的映射表中添加新东西，但是你不能修改已有的字段映射。如果一个映射已经在某个字段上生效了，那么那个字段的数据可能也已经被索引了。如果你想要修改字段的映射，已经被索引的数据可能会出错并且无法被搜索。
+	我们可以更新一个映射表，添加新的字段，但是不能将一个已有的字段从analyzed改成not_anaylyed.
+	创建一个新的索引，指定tweet字段使用英语分词器：
+	PUT /gb 
+	{
+	  "mappings": {
+	    "tweet" : {
+	      "properties" : {
+	        "tweet" : {
+	          "type" :    "string",
+	          "analyzer": "english"
+	        },
+	        "date" : {
+	          "type" :   "date"
+	        },
+	        "name" : {
+	          "type" :   "string"
+	        },
+	        "user_id" : {
+	          "type" :   "long"
+	        }
+	      }
+	    }
+	  }
+	}
+	稍后，我们决定要在gb中的tweet添加一个not_analyzed的tag文本字段：
+	PUT /gb/_mapping/tweet
+	{
+	  "properties" : {
+	    "tag" : {
+	      "type" :    "string",
+	      "index":    "not_analyzed"
+	    }
+	  }
+	}
+	需要注意的是，我们不再需要将所有已存在的字段重新列出来了，因为也无法修改它们。新字段就会被合并到原有的映射表中。
+	你可以使用analyze API来测试字符串字段的映射表，比较一下两个请求的输出：
+	GET /gb/_analyze?field=tweet
+	Black-cats //想要被分析的文本在请求中被传递给搜索引擎
+	
+	GET /gb/_analyze?field=tag
+	Black-cats 
+	tweet字段产生了两个短语 black和cat，而tag字段则产生了和输入一致的短语Black-cats。换句话说，映射表工作正常。
+	
