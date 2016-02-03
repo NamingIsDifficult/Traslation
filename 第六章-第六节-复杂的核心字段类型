@@ -1,0 +1,82 @@
+	除了我们已经提过的集中简单的标量的数据类型，JSON还有null值，数组和对象，这些数据结构Elasticsearch都是支持的。
+	事实上，标签字段通常都有多个标签而不是一个字符串，我们可以这样索引一个标签数组：
+	{ "tag": [ "search", "nosql" ]}
+	对于数组来说，并没有特别的映射，任意字段都可以包含0个到多个值，和全文字段一样，它们被分析成多个短语。
+	这也比较隐晦的表明数组中的值得是相同数据类型的，你不能将日期和字符串混在一起。如果你创建了一个通过索引数组而来的字段，Elasticsearch会将数组的第一项的数据类型作为这个新字段的类型。
+	当你从Elasticsearch获取文档的时候，文档中的数组字段的顺序和索引的时候是一致的。_source字段将会包含你索引的时候的文档一模一样的JSON。
+	但是，数组是作为多值字段被索引的，也就是说是未排序的，所以搜索的时候不能够指向第一个元素或是最后一个元素，要把数组当作是一个包含多个值得袋子。
+	数组有可能是空的，这和包含0个值得概念一致，实际上，在Lucene中是不能存储null的，所以一个一个null的字段值也会被当成是一个空的字段。
+	以下三种情况都会被当成是空的，并且不会被索引：
+	"null_value":               null,
+	"empty_array":              [],
+	"array_with_null_value":    [ null ]
+	最后一个被讨论的原生JSON数据类型就是对象,与其他语言中的哈希，哈希表，字典或者组合的数组概念一致。
+	内部对象通常被用于在一个对象中嵌入另一个一个实体或者对象。比如说：
+	{
+	    "tweet":            "Elasticsearch is very flexible",
+	    "user": {
+	        "id":           "@johnsmith",
+	        "gender":       "male",
+	        "age":          26,
+	        "name": {
+	            "full":     "John Smith",
+	            "first":    "John",
+	            "last":     "Smith"
+	        }
+	    }
+	}
+	Elasticsearch会动态的检测到新的对象字段并且将它们映射为object类型，其内部的字段都被列在properties下面：
+	{
+	  "gb": {
+	    "tweet": { //根对象
+	      "properties": {
+	        "tweet":            { "type": "string" },
+	        "user": { //嵌入对象
+	          "type":             "object",
+	          "properties": {
+	            "id":           { "type": "string" },
+	            "gender":       { "type": "string" },
+	            "age":          { "type": "long"   },
+	            "name":   { //嵌入对象
+	              "type":         "object",
+	              "properties": {
+	                "full":     { "type": "string" },
+	                "first":    { "type": "string" },
+	                "last":     { "type": "string" }
+	              }
+	            }
+	          }
+	        }
+	      }
+	    }
+	  }
+	}
+	user和name字段的映射表与tweet的映射表的结构类似，事实上，type映射表就是object映射表的一种特殊类型，我们称之为根对象。和任何其他对象都是一样的，除非它又一些特殊的为元数据服务的顶层字段，比如_source，和_all字段。
+	Lucene并不能理解嵌入的对象。一个Lucene文档包含着一个扁平的键值对列表。为了能在Elasticsearch中使用嵌入的对象的索引，它把文档转换成这种形式：
+	{
+	    "tweet":            [elasticsearch, flexible, very],
+	    "user.id":          [@johnsmith],
+	    "user.gender":      [male],
+	    "user.age":         [26],
+	    "user.name.full":   [john, smith],
+	    "user.name.first":  [john],
+	    "user.name.last":   [smith]
+	}
+	嵌入的字段可以通过名称被找到，比如first。为了区分两个拥有相同名称的字段，我们使用完整的路径(user.name.first)或者甚至包含类型名称加上路径(tweet.user.name.first)。
+	在这个被扁平化的文档中，并没有一个user或者user.name的字段，Lucene只索引基本的值，不包括复杂的数据结构。
+	最后，考虑到还有对象数组的存在，让我们看看下面这个例子：
+	{
+	    "followers": [
+	        { "age": 35, "name": "Mary White"},
+	        { "age": 26, "name": "Alex Jones"},
+	        { "age": 19, "name": "Lisa Smith"}
+	    ]
+	}
+	这个文档将会被扁平化成：
+	{
+	    "followers.age":    [19, 26, 35],
+	    "followers.name":   [alex, jones, lisa, smith, mary, white]
+	}
+	"age": 35 和 "name": "Mary White"之间的联系因为扁平化而丢失了。我们有足够充分的理由去问这样的一个问题：有没有一个26岁斌且名字是Alex Jones的跟随者呢？
+	但是这个问题却无法得到一个准确的回答。有联系的嵌入型对象可以回答这样的查询，下面会告诉你如何做。
+	
