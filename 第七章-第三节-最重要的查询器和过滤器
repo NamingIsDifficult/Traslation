@@ -1,0 +1,57 @@
+	Elasticsearch内置了许多的查询器和过滤器，只有部分是常用的。在以后的章节会更加详细的讨论它们。接下来先稍微了解一下其中比较重要的一些。
+	1.短语(term)过滤器用于过滤精确值，比如数字，日期，布尔或是not_analyzed的精确字符串值：
+	{ "term": { "age":    26           }}
+	{ "term": { "date":   "2014-09-01" }}
+	{ "term": { "public": true         }}
+	{ "term": { "tag":    "full_text"  }}
+	2.多短语(terms)过滤器和短语过滤器类似，只是输入可以有多个，任意一个匹配都使得文档可以通过这个过滤器：
+	{ "terms": { "tag": [ "search", "full_text", "nosql" ] }}
+	3.范围(range)过滤器允许你指定数字或者日期的范围来过滤文档：
+	{
+	    "range": {
+	        "age": {
+	            "gte":  20,
+	            "lt":   30
+	        }
+	    }
+	}
+	操作符代表的意义如下：
+	gt:大于
+	gte:大于或者等于
+	lt:小于
+	lte:小于或者等于
+	4.存在(exists)或者不存在(missing)的过滤器用来检测文档中的某个字段是否含有一个或多个值或者不含有任何值。在SQL中类似的命令是NOT IS_NULL和IS_NULL：
+	{
+	    "exists":   {
+	        "field":    "title"
+	    }
+	}
+	these filters are frequently used to apply a condition only if a field is present, and to apply a different condition if it is missing.
+	5.布尔(bool)过滤器被用于把多个布尔逻辑的过滤器子句组合在一起，它接收3个参数：
+	must:这些子句必须被匹配，和与的概念一样
+	must_not:这些子句必须不匹配，和非的概念一样
+	should:至少有一个或者多个子句匹配，和或的概念一样
+	每个参数可以接收一个过滤器子句或是一个数组的过滤器子句：
+	{
+	    "bool": {
+	        "must":     { "term": { "folder": "inbox" }},
+	        "must_not": { "term": { "tag":    "spam"  }},
+	        "should": [
+	                    { "term": { "starred": true   }},
+	                    { "term": { "unread":  true   }}
+	        ]
+	    }
+	}
+	6.match_all查询器仅用于匹配所有的文档。在不使用其他查询器的时候，这是默认的查询器。
+	{ "match_all": {}}
+	这个查询器最常用的地方是用于和一个过滤器组合，比如，为了获取在收件箱文件夹内的所有电邮，每个文档的关联程度都是一致的，所以它们的_score值会是默认的1.
+	match查询器可以说是基本的查询器了，通过它你可以拿到任意你想通过全文搜索或精确搜索的文档，基本上的字段都支持这个查询器。
+	如果你在全文本字段上运行match查询器的话，它会在执行搜索前使用正确的分析器分析查询字串：
+	{ "match": { "tweet": "About Search" }}
+	如果你在一个精确值所在的字段上使用它的话，它会按照精确匹配来查询：
+	{ "match": { "age":    26           }}
+	{ "match": { "date":   "2014-09-01" }}
+	{ "match": { "public": true         }}
+	{ "match": { "tag":    "full_text"  }}
+	对于精确值的搜索，你可能会想用过滤器来取代查询器，因为性能会更高。
+	
