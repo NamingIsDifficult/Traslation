@@ -1,0 +1,61 @@
+	查询DSL是一种方便的，表达能力强的搜索语言，Elasticsearch使用它来通过简单的JSON交互来表述出Lucene强大的能力。这是你在生产环境需要使用的查询方式。它使得你的查询更加的方便，更加准确，可读性更强，而且更容易debug
+	为了使用查询DSL，在查询参数(例子中是query)中传入一个查询条件：
+	GET /_search
+	{
+	    "query": YOUR_QUERY_HERE
+	}
+	这个空搜索和使用match_all查询子句的作用一样，和它的名称所表述的意思一样，匹配所有的文档：
+	GET /_search
+	{
+	    "query": {
+	        "match_all": {}
+	    }
+	}
+	一个典型的查询子句的结构如下：
+	{
+	    QUERY_NAME: {
+	        ARGUMENT: VALUE,
+	        ARGUMENT: VALUE,...
+	    }
+	}
+	举个例子来说，你可以使用match查询子句来查找类型tweets中的tweet字段有提到elasticsearch的文档：
+	{
+	    "match": {
+	        "tweet": "elasticsearch"
+	    }
+	}
+	完整的搜索请求如下：
+	GET /_search
+	{
+	    "query": {
+	        "match": {
+	            "tweet": "elasticsearch"
+	        }
+	    }
+	}
+	查询子句是一个简单的区块，它们之间可以组合成复杂的查询。子句可以是以下几种情况：
+	1：叶子子句，比如match子句，这类子句是用于比较一个字段和查询字串的。
+	2：封装的子句是用于将其它的查询子句组合起来的，比如一个bool子句允许你将类似must匹配，must_not匹配，should匹配组合在一起：
+	{
+	    "bool": {
+	        "must":     { "match": { "tweet": "elasticsearch" }},
+	        "must_not": { "match": { "name":  "mary" }},
+	        "should":   { "match": { "tweet": "full text" }}
+	    }
+	}
+	认识到一个封装的子句可以将任何其它的查询子句，包括其它封装子句组合在一起这个概念是很重要的。这意味着封装的子句可以相互嵌套，这样就可以组合出非常复杂的查询逻辑。
+	下面这个例子是为了查找包含business opportunity而且同时还需要满足被星号标记，或者在收件箱并且没有被标记为垃圾邮件的电邮：
+	{
+	    "bool": {
+	        "must": { "match":      { "email": "business opportunity" }},
+	        "should": [
+	             { "match":         { "starred": true }},
+	             { "bool": {
+	                   "must":      { "folder": "inbox" }},
+	                   "must_not":  { "spam": true }}
+	             }}
+	        ],
+	        "minimum_should_match": 1
+	    }
+	}
+	先不要考虑这个例子的细节，我们将会在后面详细讲解。这个例子是要说明封装的子句可以将许多子句组合在一起这个概念，也就是说，不管是叶子子句还是封装的子句都可以被组合到一个查询中。
