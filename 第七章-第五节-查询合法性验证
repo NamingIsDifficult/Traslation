@@ -1,0 +1,62 @@
+	查询可能会变得极为复杂，尤其当不同的分析器和字段映射表组合在一起的时候，可读性会变得极差。validate-query API可以用来检查查询字串是否合法。
+	GET /gb/tweet/_validate/query
+	{
+	   "query": {
+	      "tweet" : {
+	         "match" : "really powerful"
+	      }
+	   }
+	}
+	这个请求的响应反映查询字串是不合法的：
+	{
+	  "valid" :         false,
+	  "_shards" : {
+	    "total" :       1,
+	    "successful" :  1,
+	    "failed" :      0
+	  }
+	}
+	在请求中添加explain参数可以查询不合法的原由：
+	GET /gb/tweet/_validate/query?explain 
+	{
+	   "query": {
+	      "tweet" : {
+	         "match" : "really powerful"
+	      }
+	   }
+	}
+	显然，我们把查询器(match)的类型和字段tweet的名字搞混了：
+	{
+	  "valid" :     false,
+	  "_shards" :   { ... },
+	  "explanations" : [ {
+	    "index" :   "gb",
+	    "valid" :   false,
+	    "error" :   "org.elasticsearch.index.query.QueryParsingException:
+	                 [gb] No query registered for [tweet]"
+	  } ]
+	}
+	通过explain的返回信息可以看出elasticsearch是如何理解查询的：
+	GET /_validate/query?explain
+	{
+	   "query": {
+	      "match" : {
+	         "tweet" : "really powerful"
+	      }
+	   }
+	}
+	每个被查询的索引都会返回相应的解释，因为不同的索引持有的映射表和分析器都不定相同：
+	{
+	  "valid" :         true,
+	  "_shards" :       { ... },
+	  "explanations" : [ {
+	    "index" :       "us",
+	    "valid" :       true,
+	    "explanation" : "tweet:really tweet:powerful"
+	  }, {
+	    "index" :       "gb",
+	    "valid" :       true,
+	    "explanation" : "tweet:realli tweet:power"
+	  } ]
+	}
+	通过返回的解释可以看到查询字串被重写成两个单独的短语。gb索引和us索引之所以不同，是因为gb的tweet字段使用的是english分析器
