@@ -1,0 +1,25 @@
+	下面介绍部分会影响搜索进程的查询参数：
+	preference
+	preference参数用于控制处理搜索请求的分片或者节点。它接受_primary,_primary_first,_local,_only_node:xyz,_prefer_node:xyz,_shard:2,3等参数，详情见https://www.elastic.co/guide/en/elasticsearch/reference/current/search-request-preference.html
+	不过被广泛使用的值确实某些可选的字串，这是为了用于避免排序不一致的问题。这个问题的产生是由Elasticsearch内部发送请求是使用轮播来做负载均衡导致的，拥有相同字段的两个文档在不同分片中的顺序可能是不一样的，所以轮播导致不同请求排序不一致。对同一用户的请求总是使用相同的分片可以避免这个问题，而这个需求可以通过preference参数来限定。
+	timeout
+	默认情况下协作节点会等待所有的分片的响应，如果其中一个节点出了问题的话，可能会导致所有的搜索请求都变慢。
+	超时参数告诉协作节点最多等待多长时间，如果超时的话，就只返回当前已经获得的结果。这比起什么多不返回要好得多。
+	响应中会显示搜索请求是否超时，其中有多少分片是成功响应的。
+	    ...
+	    "timed_out":     true,  
+	    "_shards": {
+	       "total":      5,
+	       "successful": 4,
+	       "failed":     1 
+	    },
+	    ...
+	 如果在某些极限情况下所有的分片都失败了的话，响应中的_shards也会反馈相应的信息的。
+	 routing
+	 在前面的章节中有解释自定义的routing参数如何在做索引的阶段保证所有关联的文档，比如说拥有相同userId的文档都存储在同一个分片中。在搜索阶段，你可以通过指定routing的值来限制搜索的分片范围，而不是搜索所有的分片。
+	 GET /_search?routing=user_1,user2
+	 这个技术在设计超大型系统的时候就更加有用了。
+	 search_type
+	 默认的搜索类型是query_then_fetch。在某些情况下，你可能想要将搜索类型设置成dfs_query_then_fetch来提高关联度排序的准确度：
+	 GET /_search?search_type=dfs_query_then_fetch
+	 dfs_query_then_fetch搜索类型有一个预查询的阶段，这个阶段会获取参与在内的所有分片中的短语的出现频率，计算出全局的短语出现频率。
