@@ -1,0 +1,22 @@
+	一个带有scroll参数的查询是用于从Elasticsearch中获取大量文档用的，这是为了避免因为过深的分页导致的性能消耗。
+	滚卷使得我们可以做一个初始化型的搜索，然后保持批量获取文档的进程直至再没有符合条件的文档。这有点像传统数据库中的游标。
+	一个滚卷型的搜索需要及时的生成一个快照，在初始化的搜索请求创建之后，其实索引中并还没有任何的改变。它是通过保存旧有的文档来在搜索的时候可以提供搜索开始时索引的文档状况。
+	过多的分页造成的最大开销就是排序，如果不要排序而只是返回文档的话消耗就小多了。为了达成这个效果，可以使用_doc字段作为排序字段。这将通知Elasticsearch仅仅返回从分片中返回的下一批文档。
+	为了遍历结果，我们在执行搜索请求的时候还要把scroll的值设置为我们想要将滚卷窗口开放的时间长度。滚卷过期的时间在每次运行一个滚卷请求的时候都会刷新，所以这个时间只要长到刚够执行完当前这个批次的请求就可以了。超时时间是一个很重要的参数，因为保持滚卷窗口开放会消耗资源，我们希望它们会在不要的时候就释放这些资源。
+	GET /old_index/_search?scroll=1m //保持窗口开放1分钟
+	{
+	    "query": { "match_all": {}},
+	    "sort" : ["_doc"], //_doc是排序性能最好的字段
+	    "size":  1000
+	}
+	这个请求的响应中会包含一个_scroll_id，这是一个Base-64编码的长字符串。现在我们可以将_scroll_id传递给_search/scroll终节点来获取下一批结果了：
+	GET /_search/scroll
+	{
+	    "scroll": "1m", //这里再次把窗口时间设置为1分钟
+	    "scroll_id" : "cXVlcnlUaGVuRmV0Y2g7NTsxMDk5NDpkUmpiR2FjOFNhNnlCM1ZDMWpWYnRROzEwOTk1OmRSamJHYWM4U2E2eUIzVkMxalZidFE7MTA5OTM6ZFJqYkdhYzhTYTZ5QjNWQzFqVmJ0UTsxMTE5MDpBVUtwN2lxc1FLZV8yRGVjWlI2QUVBOzEwOTk2OmRSamJHYWM4U2E2eUIzVkMxalZidFE7MDs="
+	}
+	这个请求的响应中包含下一个批次的数据。虽然已指定大小为1000，我们获取回了更多的结果。扫描的时候，size这个参数被应用于每一个参与的分片，所以总数最多会是size*number_of_primary_shards每个批次。
+	每个滚卷请求都会返回个一个新的_scorll_id，每次要获取下一批的结果的时候，必须在请求中附加上一次的_scroll_id。
+	当没有更多的数据返回的时候，进程就结束了。
+	
+	
