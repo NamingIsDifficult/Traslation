@@ -1,0 +1,14 @@
+	到现在为止，我们曾通过简单的索引一个文档来创建一个索引。这个索引是使用默认设置来创建的，而且新的字段是通过动态映射添加到映射表里的。现在，我们需要对这个过程做一些控制，我们希望保证索引创建的时候其中包含合适数量的基本分片，并且分析器和映射表都在索引数据之前就被设置好。
+	为了达成这个目标，我们必须手动的创建索引，在请求主体中传入需要的设置和类型映射：
+	PUT /my_index
+	{
+	    "settings": { ... any settings ... },
+	    "mappings": {
+	        "type_one": { ... any mappings ... },
+	        "type_two": { ... any mappings ... },
+	        ...
+	    }
+	}
+	实际上，如果需要的话，可以通过在每个节点的config/elasticsearch.yml文件中设置来阻止自动创建索引：
+	action.auto_create_index: false
+	后续会讨论如何使用索引模板来预设置自动创建索引。这个方法在索引日志数据的时候特别有用。you log into an index whose name includes the date and, as midnight rolls over, a new properly configured index automatically springs into existence.
