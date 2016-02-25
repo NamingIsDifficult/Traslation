@@ -1,0 +1,33 @@
+	除了之前的两个设置外，最为重要的设置就是analysis区块，它被用于配置已存在的分析器，或者创建自定义的分析器到索引中。
+	在分析器一节中已经介绍了一部分内置的分析器，它们被用于将全文本字串转换为反向索引来适应搜索需求。
+	standard分析器是全文本字段默认使用的分析器，对西方语言来说是一个不错的选择，它包含以下特征：
+	1.standard分词器，它把输入文本按照字边界分隔
+	2.standard短语过滤器，它用于整理通过分词器产生的短语（当前的情况就是什么都不做）
+	3.lowercase短语过滤器，它用于将短语转换为小写
+	4.stop短语过滤器，它用于去除无用词，通常是对搜索结果关联程度影响小的词语，比如a,the,and,is。
+	默认情况下，无用词过滤器是停用的。你可以通过创建一个基于standard分析器的自定义分析器并将stopwords参数设置好，可以使用预先设置的无用词或者自己提供一个无用词的列表来对特定的语言做过滤。
+	在以下的例子中我们创建一个es_std的新分析器，它使用预先定义好的西班牙语无用词列表。
+	PUT /spanish_docs
+	{
+	    "settings": {
+	        "analysis": {
+	            "analyzer": {
+	                "es_std": {
+	                    "type":      "standard",
+	                    "stopwords": "_spanish_"
+	                }
+	            }
+	        }
+	    }
+	}
+	es_std分析器并不是全局的，它只存在于spanish_docs这个索引中，为了在analyze API中测试这个分析器，需要制定索引的名字：
+	GET /spanish_docs/_analyze?analyzer=es_std
+	El veloz zorro marrón
+	简写的结果显示西班牙语中的无用词El被正确的移除了：
+	{
+	  "tokens" : [
+	    { "token" :    "veloz",   "position" : 2 },
+	    { "token" :    "zorro",   "position" : 3 },
+	    { "token" :    "marrón",  "position" : 4 }
+	  ]
+	}
