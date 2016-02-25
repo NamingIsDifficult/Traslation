@@ -1,0 +1,20 @@
+	Elasticsearch的索引设置非常的灵活，你可以配置几乎所有的特性，但是如果你对这些特性还不是很了解的话，最好还是使用默认设置。
+	有两个设置是最为重要的，
+	1.number_of_shards
+	索引中基本分片的数量，默认是5，索引一经创建就无法修改这个设置。
+	2.number_of_replicas
+	每个基本分片的复制分片的数量，只要索引还存活，任意时刻都可以修改
+	比如以下请求将会创建一个只有1个基本分片且没有复制分片的索引：
+	PUT /my_temp_index
+	{
+	    "settings": {
+	        "number_of_shards" :   1,
+	        "number_of_replicas" : 0
+	    }
+	}
+	稍后可以使用update-index-settings API 动态修改复制分片的数量：
+	PUT /my_temp_index/_settings
+	{
+	    "number_of_replicas": 1
+	}
+	
