@@ -49,4 +49,43 @@
 	}
 	等到应用慢慢成熟，查询也相对更加精确之后，你会发现使用_all字段的机会越来越少了。_all字段更多时候是一种粗略的搜索应用。通过对特定的字段进行查询，整个过程将会更加的便捷，有力，以及对文档关联度有更加细粒度的控制。
 	关联度的计算算法中有一个非常重要的参数，那就是字段的长度：字段越短，匹配后的关联程度就越高。而这个差别在_all字段里是无法体现的。
-	
+	如果你确认不要这个字段的话，可以禁止它：
+	PUT /my_index/_mapping/my_type
+	{
+	    "my_type": {
+	        "_all": { "enabled": false }
+	    }
+	}
+	_all字段中的内容可以通过使用_include_in_all来逐个字段做控制。默认是true。默认情况下，在一个对象（或者根对象）上设置include_in_all会改变这个对象上的所有字段的行为。
+	你可以保留_all字段作为指定字段的一个全文搜索字段，比如title,overview等。相对于完全禁用_all字段，默认情况下应该禁用所有字段的include_in_all，只对有需要的字段启用：
+	PUT /my_index/my_type/_mapping
+	{
+	    "my_type": {
+	        "include_in_all": false,
+	        "properties": {
+	            "title": {
+	                "type":           "string",
+	                "include_in_all": true
+	            },
+	            ...
+	        }
+	    }
+	}
+	请记住，_all字段只是一个分析过的string字段。不管原始值字段上的分析器是什么，它都使用默认的分析其来分析输入。你可配置这个分析器，方法如下：
+	PUT /my_index/my_type/_mapping
+	{
+	    "my_type": {
+	        "_all": { "analyzer": "whitespace" }
+	    }
+	}
+	用于识别文档的标识由4个元数据字段组成：
+	_id:
+		文档的字符串Id
+	_type:
+		文档的类型名称
+	_index
+		文档存活的索引
+	_uid
+		_type和_id连接在一起组成type#id
+	默认情况下，_uid字段也是存储的（也就是说可以被获取）并索引的(可以被搜索)._type字段是被索引但是未被存储的，_id和_index字段则既未被索引也未被存储，也就说他们并不是真正存在的。
+	在这个原理之下，你可以对_id字段进行搜索，仿佛它存在一般。Elasticsearch使用_uid字段来继承_id.尽管你可能对这些字段的index和store配置做修改，不过可能性很小。
