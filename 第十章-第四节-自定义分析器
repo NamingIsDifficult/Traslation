@@ -1,0 +1,96 @@
+	Elasticsearch不单单提供了许多内置可用的分析器，更在于它提供了将字符过滤器，分词器，短语过滤器组合起来自定义一个适用的分析器的能力。
+	前文曾提及一个分析器就是一个讲3种功能整合到一起的包装器，这几个功能按以下顺序执行：
+	1.字符过滤器
+	字符过滤被用于整理分词前的输入字串。如果输入是HTML格式，它会包含HTML标签，这些标签不需要被索引，这时就可以使用html_strip字符过滤器来一出HTML标签，或者将HTML实体 &Aacute; 等转换为Unicode字符 Á。一个分析器可以包含多个字符过滤器。
+	2.分词器：
+	一个分析器必须且只能有一个分词器。分词器将输入字串分隔为单独的短语。standard分词器用于standard分析器中，按字符边界将字串分隔为单个的短语，并且移除大部分的标点符号，不过其它的分词器行为各不相同。
+	比如keyword分词器的输出和输入一致，不做任何的分词处理。空格分词器按空格分隔，pattern分词器可以使用正则表达式来分隔文本。
+	3.短语过滤器
+	分词过后，结果中的短语将通过指定的短语过滤器来确认他们中的哪些是指定的。
+	短语过滤器可以修改，添加或者去除短语。之前提到的lowercase,stop token过滤器之外还有非常多的过滤器。stemming短语过滤器将单词转换为它们的词根。ascii_folding过滤器去除发音符号，将très转换为tres。ngram和edge_ngram短语过滤器可以创建蛇和部分匹配或者自动补全的短语。
+	这些短语过滤器的用法后续会详细介绍。
+	与之前配置es_std分析器类似，我们可以在相应的区块中配置字符过滤器，分词器和短语过滤器：
+	PUT /my_index
+	{
+	    "settings": {
+	        "analysis": {
+	            "char_filter": { ... custom character filters ... },
+	            "tokenizer":   { ...    custom tokenizers     ... },
+	            "filter":      { ...   custom token filters   ... },
+	            "analyzer":    { ...    custom analyzers      ... }
+	        }
+	    }
+	}
+	举例说明一个自定义分析器如何实现以下功能：
+	1.使用html_strip字符过滤器来剥离HTML标签
+	2.将&字符用and替换，使用自定义的mapping字符过滤器
+	"char_filter": {
+	    "&_to_and": {
+	        "type":       "mapping",
+	        "mappings": [ "&=> and "]
+	    }
+	}
+	3.使用standard分词器
+	4.使用lowercase短语过滤器
+	5.使用自定义的无用词短语过滤器，并且对照自定义的无用词列表移除无用词
+	"filter": {
+	    "my_stopwords": {
+	        "type":        "stop",
+	        "stopwords": [ "the", "a" ]
+	    }
+	}
+	我们的分析器定义中包含了之前定义的分词器和过滤器：
+	"analyzer": {
+	    "my_analyzer": {
+	        "type":           "custom",
+	        "char_filter":  [ "html_strip", "&_to_and" ],
+	        "tokenizer":      "standard",
+	        "filter":       [ "lowercase", "my_stopwords" ]
+	    }
+	}
+	完整的创建请求如下：
+	PUT /my_index
+	{
+	    "settings": {
+	        "analysis": {
+	            "char_filter": {
+	                "&_to_and": {
+	                    "type":       "mapping",
+	                    "mappings": [ "&=> and "]
+	            }},
+	            "filter": {
+	                "my_stopwords": {
+	                    "type":       "stop",
+	                    "stopwords": [ "the", "a" ]
+	            }},
+	            "analyzer": {
+	                "my_analyzer": {
+	                    "type":         "custom",
+	                    "char_filter":  [ "html_strip", "&_to_and" ],
+	                    "tokenizer":    "standard",
+	                    "filter":       [ "lowercase", "my_stopwords" ]
+	            }}
+	}}}
+	创建完索引之后，使用analyze API来测试新的分析器：
+	GET /my_index/_analyze?analyzer=my_analyzer
+	The quick & brown fox
+	以下简写的结果显示分析器正确的运行了：
+	{
+	  "tokens" : [
+	      { "token" :   "quick",    "position" : 2 },
+	      { "token" :   "and",      "position" : 3 },
+	      { "token" :   "brown",    "position" : 4 },
+	      { "token" :   "fox",      "position" : 5 }
+	    ]
+	}
+	这个分析器如果没有被指定到特定的字段的话就不会被使用。使用方法如下：
+	PUT /my_index/_mapping/my_type
+	{
+	    "properties": {
+	        "title": {
+	            "type":      "string",
+	            "analyzer":  "my_analyzer"
+	        }
+	    }
+	}
+	
