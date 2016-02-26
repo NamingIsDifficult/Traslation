@@ -1,0 +1,58 @@
+	如果你已经预计到将会有新的字段出现的话，你可能会想要将动态映射功能开启。这个时候，动态映射的规则可能会有些不太适用。幸运的是，你可以自定义这部分的规则来适应不同的数据。
+	当elasticsearch碰到一个新的字符串字段的时候，它先检查字串是否包含一个可以识别的日期，比如2014-01-01。如果是的话，这个字段就会被当作是date类型添加到映射表中，反之的话就会被添加为string类型。
+	有的时候这种特性可能会造成问题，想象一下如果对下面的数据作索引的话：
+	{ "note": "2014-01-01" }
+	假设这是note字段中第一个被检查的值，这时Elasticsearch会把note字段映射为date类型，但是如果下一条数据是这样的：
+	{ "note": "Logged out" }
+	显然这不是日期，但已经晚了，字段已经被映射为date类型，所以这个畸形的时间数据就会造成异常并且抛出。
+	日期检测可以通过在根对象中设置date_detection为false来禁用：
+	PUT /my_index
+	{
+	    "mappings": {
+	        "my_type": {
+	            "date_detection": false
+	        }
+	    }
+	}
+	通过这个配置，字符串字段会一直被当作是string类型。如果你需要一个date类型的字段，必须要手动添加。
+	日期检测的规则可通过dynamic_date_formats设置来修改。
+	dynamic_templates设置用于控制新字段的映射。你甚至可以基于字段的名称和类型来设置映射表。
+	每个模板都有名称，这些名称用于描述模板的功用，mapping属性指定要做用于哪个映射表，而且至少有一个参数，比如match，来定义哪些字段会被应用到模板。
+	如有多个模板，则会按顺序检查。第一个匹配的模板将会被应用。比如，我们可以为string字段指定2个模板：
+	es:字段名字以_es结尾的使用spanish分析器
+	en:其它使用english分析器
+	把es模板放在前面，是因为它的匹配更为精确：
+	PUT /my_index
+	{
+	    "mappings": {
+	        "my_type": {
+	            "dynamic_templates": [
+	                { "es": {
+	                      "match":              "*_es", 
+	                      "match_mapping_type": "string",
+	                      "mapping": {
+	                          "type":           "string",
+	                          "analyzer":       "spanish"
+	                      }
+	                }},
+	                { "en": {
+	                      "match":              "*", 
+	                      "match_mapping_type": "string",
+	                      "mapping": {
+	                          "type":           "string",
+	                          "analyzer":       "english"
+	                      }
+	                }}
+	            ]
+	}}}
+	match_mapping_type参数用于指定应用模板的字段需要符合的类型，这个类型是有基本动态映射规则检测出来的，比如string或long.
+	match参数用于匹配字段名称，path_match参数用于匹配一个对象中的字段的全路径，所以address.*.name会匹配以下字段：
+	{
+	    "address": {
+	        "city": {
+	            "name": "New York"
+	        }
+	    }
+	}
+	unmatch和path_unmatch的作用则相反。
+	更多地详情请参照https://www.elastic.co/guide/en/elasticsearch/reference/current/dynamic-mapping.html
