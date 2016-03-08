@@ -1,0 +1,92 @@
+	在实际应用中，可能会对多个字段进行过滤，或对某个字段应用多个过滤器，这时候应该使用布尔过滤器。这时一个封装型的过滤器，它接受其它过滤器作为参数，然后将它们整合到多个布尔组合中。
+	bool过滤器由三个分段组成：
+	{
+	   "bool" : {
+	      "must" :     [], //这里的子句都必须匹配，相当于逻辑与
+	      "should" :   [], //至少有一个子句匹配
+	      "must_not" : [], //这里的子句都不能匹配
+	   }
+	}
+	当你需要多个过滤器共同作用的时候 ，就使用布尔过滤器来包装它们。
+	每个分段都是可选的，其中可以包含1个或者一组过滤器。
+	举例如下：
+	
+	GET /my_store/products/_search
+	{
+	   "query" : {
+	      "filtered" : { 
+	         "filter" : {
+	            "bool" : {
+	              "should" : [
+	                 { "term" : {"price" : 20}}, 
+	                 { "term" : {"productID" : "XHDK-A-1293-#fJ3"}} 
+	              ],
+	              "must_not" : {
+	                 "term" : {"price" : 30} 
+	              }
+	           }
+	         }
+	      }
+	   }
+	}
+	
+	响应：
+	"hits" : [
+	    {
+	        "_id" :     "1",
+	        "_score" :  1.0,
+	        "_source" : {
+	          "price" :     10,
+	          "productID" : "XHDK-A-1293-#fJ3" 
+	        }
+	    },
+	    {
+	        "_id" :     "2",
+	        "_score" :  1.0,
+	        "_source" : {
+	          "price" :     20, 
+	          "productID" : "KDKE-B-9947-#kL5"
+	        }
+	    }
+	]
+	布尔过滤器可以嵌套使用：
+	GET /my_store/products/_search
+	{
+	   "query" : {
+	      "filtered" : {
+	         "filter" : {
+	            "bool" : {
+	              "should" : [
+	                { "term" : {"productID" : "KDKE-B-9947-#kL5"}}, 
+	                { "bool" : { 
+	                  "must" : [
+	                    { "term" : {"productID" : "JODL-X-1937-#pV7"}}, 
+	                    { "term" : {"price" : 30}} 
+	                  ]
+	                }}
+	              ]
+	           }
+	         }
+	      }
+	   }
+	}
+	响应：
+	"hits" : [
+	    {
+	        "_id" :     "2",
+	        "_score" :  1.0,
+	        "_source" : {
+	          "price" :     20,
+	          "productID" : "KDKE-B-9947-#kL5" 
+	        }
+	    },
+	    {
+	        "_id" :     "3",
+	        "_score" :  1.0,
+	        "_source" : {
+	          "price" :      30, 
+	          "productID" : "JODL-X-1937-#pV7" 
+	        }
+	    }
+	]
+	以上例子简单的演示了布尔过滤器是如何建立复杂的逻辑状况下的查询结构的。
