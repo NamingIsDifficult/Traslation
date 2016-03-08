@@ -1,0 +1,125 @@
+	当对精确值做操组的时候，一般会使用到过滤器。过滤器非常的重要，因为它们运行的真的很快。过滤器不会计算关联程度，并且可以很简单的缓存，所以能用过滤器就尽量使用过滤器。
+	首先介绍一下短语(term)过滤器，这个是非常常用的。这个过滤器可以处理数字，布尔，日期和文本。
+	下面是一个在索引产品时使用数字的例子，这些文档包含price和productId：
+	POST /my_store/products/_bulk
+	{ "index": { "_id": 1 }}
+	{ "price" : 10, "productID" : "XHDK-A-1293-#fJ3" }
+	{ "index": { "_id": 2 }}
+	{ "price" : 20, "productID" : "KDKE-B-9947-#kL5" }
+	{ "index": { "_id": 3 }}
+	{ "price" : 30, "productID" : "JODL-X-1937-#pV7" }
+	{ "index": { "_id": 4 }}
+	{ "price" : 30, "productID" : "QQPX-R-3956-#aD8" }
+	现在找出所有具有指定价钱的产品，在关系型数据库中，SQL大概是这么写的：
+	SELECT document
+	FROM   products
+	WHERE  price = 20
+	而在Elasticsearch的结构化查询语言中，使用短语过滤器来达成相同的结果。短语过滤器会查找指定的精确值。就过滤器本身而言，短语过滤器是很简单的。它接受一个字段名称和需要查找的值：
+	{
+	    "term" : {
+	        "price" : 20
+	    }
+	}
+	短语过滤器本身并不是很好用，search API接受的是一个查询，而不是一个过滤器，为了使用短语过滤器，需要把过滤器包装在filtered query里：
+	GET /my_store/products/_search
+	{
+	    "query" : {
+	        "filtered" : { 
+	            "query" : {
+	                "match_all" : {} 
+	            },
+	            "filter" : {
+	                "term" : { 
+	                    "price" : 20
+	                }
+	            }
+	        }
+	    }
+	}
+	一旦这个请求执行的话，搜索结果和你预期的是一样的，只有两个价格是20的产品被返回了：
+	"hits" : [
+	    {
+	        "_index" : "my_store",
+	        "_type" :  "products",
+	        "_id" :    "2",
+	        "_score" : 1.0, //过滤器不会计算得分和关联程度，这个分数是match_all查询器计算出来的
+	        "_source" : {
+	          "price" :     20,
+	          "productID" : "KDKE-B-9947-#kL5"
+	        }
+	    }
+	]
+	短语过滤器对文本的处理和对数字的处理一样：
+	GET /my_store/products/_search
+	{
+	    "query" : {
+	        "filtered" : {
+	            "filter" : {
+	                "term" : {
+	                    "productID" : "XHDK-A-1293-#fJ3"
+	                }
+	            }
+	        }
+	    }
+	}
+	不同的是这个查询没有任何结果，为什么呢？问题不在于短语过滤器，因为数据的索引方式不同。如果使用analyze API，就可以看到字段已经被分词为短语了：
+	GET /my_store/_analyze?field=productID
+	XHDK-A-1293-#fJ3
+	{
+	  "tokens" : [ {
+	    "token" :        "xhdk",
+	    "start_offset" : 0,
+	    "end_offset" :   4,
+	    "type" :         "<ALPHANUM>",
+	    "position" :     1
+	  }, {
+	    "token" :        "a",
+	    "start_offset" : 5,
+	    "end_offset" :   6,
+	    "type" :         "<ALPHANUM>",
+	    "position" :     2
+	  }, {
+	    "token" :        "1293",
+	    "start_offset" : 7,
+	    "end_offset" :   11,
+	    "type" :         "<NUM>",
+	    "position" :     3
+	  }, {
+	    "token" :        "fj3",
+	    "start_offset" : 13,
+	    "end_offset" :   16,
+	    "type" :         "<ALPHANUM>",
+	    "position" :     4
+	  } ]
+	}
+	有这么几个需要注意的点：
+	1.分词过后短语数量变多了
+	2.所有的字母都被小写话了
+	3.丢失了横杠和井号
+	所以当过滤器中的值是XHDK-A-1293-#fJ3时，显然不会匹配到任意文档，因为短语并不存在于反向索引中，而是经过分词过后的4个短语。
+	很显然，这和我们想象的不一样啊！为了防止这个问题，需要在字段准哦概念加入not_analyzed参数：
+	DELETE /my_store //先删除
+
+	PUT /my_store 
+	{
+	    "mappings" : {
+	        "products" : {
+	            "properties" : {
+	                "productID" : {
+	                    "type" : "string",
+	                    "index" : "not_analyzed" 
+	                }
+	            }
+	        }
+	    }
+	
+	}
+	重新索引之后就可以匹配到相应的文档了。
+	在Elasticsearch内部，执行过滤器的时候会发生这几步：
+	1.查找匹配的文档
+		短语过滤器在反向索引中查找指定的短语然后获取匹配的文档列表。
+	2.建立一个位集合
+		过滤器建立一个1、0组成的位集合，使用数组包含，它描述文档是否包含指定短语。匹配的文档值为1.
+	3.缓存位集合
+		缓存使得下一次使用该过滤器的时候不用执行前面两步
+	当执行filtered查询的时候，过滤器会比查询器先执行，位集合会传递给查询器用来直接跳过不匹配的文档，这样可以提高性能。
