@@ -1,0 +1,106 @@
+	如果一个字段值中什么值都没有，它在反向索引中是如何被存储的呢？
+	首先，这个问题本身就有问题，因为这种情况下根本就不会有数据被存储。在反向索引的数据结构中，根本就不可能存储一个不存在的字段，因为反向索引的定义就是一个文档包含的短语数量的列表，一个不存在的字段自然不会有任何短语，也就是说它不可能再反向索引的数据结构中出现。
+	基本情况下，null,[],[null]是等价的，它们都不会出现在反向索引中。
+	但是很显然，现实世界中的数据经常会有缺失，或者是显示声明的Null。为了处理这些情形，Elasticsearch有一些处理空值的工具。
+	其中之一就是exists过滤器。这个过滤器会返回指定字段中包含特定值得文档。为了演示的目的，首先先索引以下文档：
+	POST /my_index/posts/_bulk
+	{ "index": { "_id": "1"              }}
+	{ "tags" : ["search"]                }  
+	{ "index": { "_id": "2"              }}
+	{ "tags" : ["search", "open_source"] }  
+	{ "index": { "_id": "3"              }}
+	{ "other_field" : "some data"        }  
+	{ "index": { "_id": "4"              }}
+	{ "tags" : null                      }  
+	{ "index": { "_id": "5"              }}
+	{ "tags" : ["search", null]          }  
+	反向索引如下：
+	Token				DocIDs
+	open_source			2
+	search				1,2,5
+	我们的目标是找到所有有标签的文档，这里并不在意标签是什么，只要求有就行：
+	GET /my_index/posts/_search
+	{
+	    "query" : {
+	        "filtered" : {
+	            "filter" : {
+	                "exists" : { "field" : "tags" }
+	            }
+	        }
+	    }
+	}
+	响应如下：
+	"hits" : [
+	    {
+	      "_id" :     "1",
+	      "_score" :  1.0,
+	      "_source" : { "tags" : ["search"] }
+	    },
+	    {
+	      "_id" :     "5",
+	      "_score" :  1.0,
+	      "_source" : { "tags" : ["search", null] } //即使有null，但是只要其中还有有效的值，就可以通过exists过滤器
+	    },
+	    {
+	      "_id" :     "2",
+	      "_score" :  1.0,
+	      "_source" : { "tags" : ["search", "open source"] }
+	    }
+	]
+	结果很好理解。所有tags字段有有效值的文档都会被返回。
+	missing过滤器则是exists过滤器的必要补充，它的判断和exists正好相反：
+	GET /my_index/posts/_search
+	{
+	    "query" : {
+	        "filtered" : {
+	            "filter": {
+	                "missing" : { "field" : "tags" }
+	            }
+	        }
+	    }
+	}
+	这个查询将会返回tags字段中没有有效值的文档，响应如下：
+	"hits" : [
+	    {
+	      "_id" :     "3",
+	      "_score" :  1.0,
+	      "_source" : { "other_field" : "some data" }
+	    },
+	    {
+	      "_id" :     "4",
+	      "_score" :  1.0,
+	      "_source" : { "tags" : null }
+	    }
+	]
+	如果要区分字段是否是空还是被显示指定为null，按照现有的手段是不能区分的，因为根本没有数据可以区分。幸运的是，有一种把显示指定的null替换为指定的占位符的方法。
+	当指定string,numeric,boolean,date字段的映射表时，可以在碰到显示指定的null值设置一个null_value。而一个没有值得字段依旧会被反向索引排除在外。
+	当选择一个合适的null_value的时候，需要保证以下几点：
+	1.它要匹配字段的类型
+	2.和普通的值不同以免造成混淆
+	exists过滤器和missing过滤器对内部对象也是可用的，而不仅仅对核心类型有效，假设有以下文档：
+	{
+	   "name" : {
+	      "first" : "John",
+	      "last" :  "Smith"
+	   }
+	}
+	你可以检查name.first和name.last是否存在，也可以只检查name。但是，如前言所述，对象会被扁平化成简单的键值对结构：
+	{
+	   "name.first" : "John",
+	   "name.last"  : "Smith"
+	}
+	所以如何对反向索引中不存在的name字段使用这两个过滤器呢？
+	原因是以下过滤器：
+	{
+    	"exists" : { "field" : "name" }
+	}
+	在实际情况下是这样被执行的：
+	{
+	    "bool": {
+	        "should": [
+	            { "exists": { "field": { "name.first" }}},
+	            { "exists": { "field": { "name.last"  }}}
+	        ]
+	    }
+	}
+	这也意味着如果first和last都不存在的话，name自然也不存在。
