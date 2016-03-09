@@ -1,0 +1,55 @@
+	match是一个转向查询，不论你要在哪个字段上做何种查询都要先通过它。这是一个高层的全文本查询，意味着它知道如何处理全文本字段和精确值字段。
+	即便如此，match最主要的应用还是用还处理全文本查询。为了演示，首先先创建一个新的索引，然后索引一些文档进去：
+	DELETE /my_index 
+
+	PUT /my_index
+	{ "settings": { "number_of_shards": 1 }} //思考一下为什么要设置分片数为1
+	
+	POST /my_index/my_type/_bulk
+	{ "index": { "_id": 1 }}
+	{ "title": "The quick brown fox" }
+	{ "index": { "_id": 2 }}
+	{ "title": "The quick brown fox jumps over the lazy dog" }
+	{ "index": { "_id": 3 }}
+	{ "title": "The quick brown fox jumps over the quick dog" }
+	{ "index": { "_id": 4 }}
+	{ "title": "Brown fox brown dog" }
+	
+	先看这个简单的查询：
+	
+	GET /my_index/my_type/_search
+	{
+	    "query": {
+	        "match": {
+	            "title": "QUICK!"
+	        }
+	    }
+	}
+	Elasticsearch的执行步骤如下：
+	1.检查字段的类型
+	2.分析查询字串
+	3.通过反向索引查找匹配的文档的id
+	4.短语查询会通过tf/tdf和字段的长度来计算每个匹配的文档的关联分_score
+	"hits": [
+	 {
+	    "_id":      "1",
+	    "_score":   0.5, 
+	    "_source": {
+	       "title": "The quick brown fox"
+	    }
+	 },
+	 {
+	    "_id":      "3",
+	    "_score":   0.44194174, 
+	    "_source": {
+	       "title": "The quick brown fox jumps over the quick dog"
+	    }
+	 },
+	 {
+	    "_id":      "2",
+	    "_score":   0.3125, 
+	    "_source": {
+	       "title": "The quick brown fox jumps over the lazy dog"
+	    }
+	 }
+	]
