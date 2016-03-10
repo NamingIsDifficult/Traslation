@@ -1,0 +1,49 @@
+	实际上，多词match查询仅仅是把生成的短语包裹在一个布尔查询里罢了，默认的or操作符使得每个短语查询仿佛是添加到should区块一般，也就是说至少有一个子句匹配即可，以下两个查询是等价的：
+	{
+	    "match": { "title": "brown fox"}
+	}
+	{
+	  "bool": {
+	    "should": [
+	      { "term": { "title": "brown" }},
+	      { "term": { "title": "fox"   }}
+	    ]
+	  }
+	}
+	而使用and操作符时,所有短语查询子句则相当于放入了must区块，所以所有的子句都必须匹配：
+	{
+	    "match": {
+	        "title": {
+	            "query":    "brown fox",
+	            "operator": "and"
+	        }
+	    }
+	}
+	{
+	  "bool": {
+	    "must": [
+	      { "term": { "title": "brown" }},
+	      { "term": { "title": "fox"   }}
+	    ]
+	  }
+	}
+	假如使用了minimum_should_match参数的话，这个参数则会直接传给布尔查询：
+	{
+	    "match": {
+	        "title": {
+	            "query":                "quick brown fox",
+	            "minimum_should_match": "75%"
+	        }
+	    }
+	}
+	{
+	  "bool": {
+	    "should": [
+	      { "term": { "title": "brown" }},
+	      { "term": { "title": "fox"   }},
+	      { "term": { "title": "quick" }}
+	    ],
+	    "minimum_should_match": 2 //因为有3个子句，所以75%被向下舍入为2
+	  }
+	}
+	当然，这些查询都可以使用match查询来实现，不过理解它的内部执行情况可以使你对需要的过程做控制。至于每个短语的权重配置，这个后续会详细介绍。
