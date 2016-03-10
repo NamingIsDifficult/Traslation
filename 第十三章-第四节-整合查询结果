@@ -1,0 +1,50 @@
+	使用布尔过滤器整合多个子句时，其中的每个子句都会做一个二义性的判断：这个文档是否匹配。查询则相对微妙许多，它们不单要看文档是否匹配，还要看文档的关联程度是多少。
+	和过滤器一样，布尔查询接收多个子句，并且分为must,must_not和should三个区块，如下例所示：
+	GET /my_index/my_type/_search
+	{
+	  "query": {
+	    "bool": {
+	      "must":     { "match": { "title": "quick" }},//必须匹配quick
+	      "must_not": { "match": { "title": "lazy"  }},//必须不匹配lazy
+	      "should": [
+	                  { "match": { "title": "brown" }},//如果没有must区块责至少包含brown或者dog中的一个，否则可以不匹配
+	                  { "match": { "title": "dog"   }}
+	      ]
+	    }
+	  }
+	}
+	响应如下：
+	{
+	  "hits": [
+	     {
+	        "_id":      "3",
+	        "_score":   0.70134366, //匹配的条件越多，分数越高
+	        "_source": {
+	           "title": "The quick brown fox jumps over the quick dog"
+	        }
+	     },
+	     {
+	        "_id":      "1",
+	        "_score":   0.3312608,
+	        "_source": {
+	           "title": "The quick brown fox"
+	        }
+	     }
+	  ]
+	}
+	布尔查询为每个文档都计算了关联分_score，这是把各个区块的关联分加起来的结果，然后再除以子句的数量。
+	should区块可以通过指定minimum_should_match来设置必须匹配的数量,也可以指定百分比：
+	GET /my_index/my_type/_search
+	{
+	  "query": {
+	    "bool": {
+	      "should": [
+	        { "match": { "title": "brown" }},
+	        { "match": { "title": "fox"   }},
+	        { "match": { "title": "dog"   }}
+	      ],
+	      "minimum_should_match": 2 
+	    }
+	  }
+	}
+	匹配的越多，分数越高，且至少要匹配两条。
