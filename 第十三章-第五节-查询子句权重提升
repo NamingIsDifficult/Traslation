@@ -1,0 +1,53 @@
+	当然，布尔查询不会被限制为只能整合简单的一个词的匹配查询。它可以整合任意其它查询，包括布尔查询。它通常用于整合数个不同的查询的关联得分后做微调以获得总的关联得分_score。假设我们要搜索关于"full-text search,"的文档，但是我们希望给提到了Elasticsearch或者Lucene的文档更高的权重，也就说包含这些词的文档的关联分要更高，排序会更靠前。
+	以下是一个简单的布尔查询，它支持以上的复杂逻辑：
+	GET /_search
+	{
+	    "query": {
+	        "bool": {
+	            "must": {
+	                "match": {
+	                    "content": { //content字段需要匹配查询中的所有短语
+	                        "query":    "full text search",
+	                        "operator": "and"
+	                    }
+	                }
+	            },
+	            "should": [ //如果content中包含这些词的话得分会高
+	                { "match": { "content": "Elasticsearch" }},
+	                { "match": { "content": "Lucene"        }}
+	            ]
+	        }
+	    }
+	}
+	should区块中匹配的越多，关联程度就越高。但如果要使得Lucene的权重高于Elasticsearch呢？这是可以通过指定boost值来控制任意查询子句的权重，它默认值是1.大于1的值意味着子句的权重提高。查询如下：
+	GET /_search
+	{
+	    "query": {
+	        "bool": {
+	            "must": {
+	                "match": {  
+	                    "content": {//默认的boost为1
+	                        "query":    "full text search",
+	                        "operator": "and"
+	                    }
+	                }
+	            },
+	            "should": [
+	                { "match": {
+	                    "content": {
+	                        "query": "Elasticsearch",
+	                        "boost": 3 
+	                    }
+	                }},
+	                { "match": {
+	                    "content": {
+	                        "query": "Lucene",
+	                        "boost": 2 
+	                    }
+	                }}
+	            ]
+	        }
+	    }
+	}
+	boost的值并不是线性增长的，2比1的关联分不是2倍的关系，事实上，新的_score在boost应用之后会被规范化，不同类型的查询的规范化算法也不同，后续会再做介绍。可以确定的是，boost值越高，意味着_score也越高。
+	如果你实现了不是基于TF/IDF的打分模型并且需要对权重提升过程添加更多的控制的话，可以使用function_score查询来操作一个文档的权重提升而不用经过规范化步骤。
