@@ -1,0 +1,74 @@
+	如果每次只能搜索一个词，那么要做全文搜索还挺不方便的。不过在match查询中使用多词查询也很简单：
+	GET /my_index/my_type/_search
+	{
+	    "query": {
+	        "match": {
+	            "title": "BROWN DOG!"
+	        }
+	    }
+	}
+	响应如下：
+	{
+	  "hits": [
+	     {
+	        "_id":      "4",
+	        "_score":   0.73185337, //包含brown 2次，dog 1次
+	        "_source": {
+	           "title": "Brown fox brown dog"
+	        }
+	     },
+	     {
+	        "_id":      "2",
+	        "_score":   0.47486103, //包含brown 1次，dog 1次
+	        "_source": {
+	           "title": "The quick brown fox jumps over the lazy dog"
+	        }
+	     },
+	     {
+	        "_id":      "3",
+	        "_score":   0.47486103, //包含brown 1次，dog 1次
+	        "_source": {
+	           "title": "The quick brown fox jumps over the quick dog"
+	        }
+	     },
+	     {
+	        "_id":      "1",
+	        "_score":   0.11914785, //包含brown 1次，dog 0次
+	        "_source": {
+	           "title": "The quick brown fox"
+	        }
+	     }
+	  ]
+	}
+	因为match查询必要查找两个短语["brown","dog"],在系统内部，必须要执行两个短语查询并且整合到一个全局结果中。为了达成这个效果，它会把两个短语查询包裹在一个布尔查询中。
+	这里有一个重要的概念是任意文档的title字段中包含至少一个指定的短语就会被匹配，匹配的短语越多，关联程度越高。
+	匹配任意包含至少一个短语的文档的话可能会使结果中包含许多不太关联的文档。这是搜索中的鸟枪法。或许我们只是想要展示包含所有短语的文档，换句话说，不是brown or dog，而是brown and dog。
+	match查询接收operator参数，默认是or。可以设置为and来使得所有的短语都必须匹配。
+	GET /my_index/my_type/_search
+	{
+	    "query": {
+	        "match": {
+	            "title": {     //为了使用operator参数，格式稍微变化了一些 
+	                "query":    "BROWN DOG!",
+	                "operator": "and"
+	            }
+	        }
+	    }
+	}
+	这样的话，响应中就只会有第一个文档了。
+	这种非黑即白的方式对于实际应用来说还是太生硬了，假设用户指定了5个查询短语，而一个文档只包含4个，如果指定查询方式为and，那就不会匹配它，有时这个情况就是你想要的，但是更多的全文搜索场景下，你希望将关联程度高的文档提取出来，而关联程度低的剔除。换句话说，需要有区间的概念。
+	match查询支持minimum_should_match参数，它提供了指定一个文档至少要匹配多少个短语才算有关联。也可以指定一个绝对的短语数量，不过指定百分比往往更加有意义，这样就不需要考虑到底有多少个短语了：
+	GET /my_index/my_type/_search
+	{
+	  "query": {
+	    "match": {
+	      "title": {
+	        "query":                "quick brown dog",
+	        "minimum_should_match": "75%"
+	      }
+	    }
+	  }
+	}
+	当指定百分比的时候,minimum_should_match就会按照短语的实际数量调整，比如说有3个短语，那么75%就会被调整为66.6%，或者三分之二。不管你怎么设置，最少得有一个短语要匹配。
+	这个参数运用起来很是便捷，而且对于用户输入的短语的数量不同可以使用不同的规则，详情请见：https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-minimum-should-match.html#query-dsl-minimum-should-match
+	为了完全的了解match查询是如何处理多词查询的，我们还需要去看看怎么使用布尔查询整合多个查询结果。
