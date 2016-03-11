@@ -1,0 +1,59 @@
+	最简单的多字段查询是可以把查询短语精确匹配到对应的字段的情况，这是可以使用布尔查询包裹多个匹配字段的match子句：
+	GET /_search
+	{
+	  "query": {
+	    "bool": {
+	      "should": [
+	        { "match": { "title":  "War and Peace" }},
+	        { "match": { "author": "Leo Tolstoy"   }}
+	      ]
+	    }
+	  }
+	}
+	布尔查询的策略是，匹配的越多越好，所以每个match子句的得分会被加在一起提供最终的_score。匹配的数量多的文档得分也相对要高。
+	当然，这里并不限定只能使用match子句，布尔查询可以包裹任意其他的查询类型，包括布尔查询：
+	GET /_search
+	{
+	  "query": {
+	    "bool": {
+	      "should": [
+	        { "match": { "title":  "War and Peace" }},
+	        { "match": { "author": "Leo Tolstoy"   }},
+	        { "bool":  {
+	          "should": [
+	            { "match": { "translator": "Constance Garnett" }},
+	            { "match": { "translator": "Louise Maude"      }}
+	          ]
+	        }}
+	      ]
+	    }
+	  }
+	}
+	既然都是should区块，为什么要把translator的匹配子句放在另外一个布尔子句中呢？这是因为计算关联分的方式导致的，布尔查询将每个match查询运行完之后把他们的得分加在一起，然后乘上匹配的子句数量，再除以子句的总数。同一级别的子句得分权重相同。上例中包含translator的布尔子句包含了总分中1/3的权重。如果把translator放在和其它子句相同的级别的话，将会降低另外两个match查询的权重，从原来的1/3降到1/4.
+	如果想要使得title和author的权重更高，那么需要修改查询，使得它们对关联分的计算更加重要，最简单的方法就是使用boost参数，提高字段的权重：
+	GET /_search
+	{
+	  "query": {
+	    "bool": {
+	      "should": [
+	        { "match": { 
+	            "title":  {
+	              "query": "War and Peace",
+	              "boost": 2
+	        }}},
+	        { "match": { 
+	            "author":  {
+	              "query": "Leo Tolstoy",
+	              "boost": 2
+	        }}},
+	        { "bool":  { 
+	            "should": [
+	              { "match": { "translator": "Constance Garnett" }},
+	              { "match": { "translator": "Louise Maude"      }}
+	            ]
+	        }}
+	      ]
+	    }
+	  }
+	}
+	boost参数的最佳设置通常是通过尝试和错误来慢慢调整的：设置-测试-再设置。boost值在1-15都算在正常范围，过高的值并没有什么作用，因为它对得分的影响是会被规范化的。
