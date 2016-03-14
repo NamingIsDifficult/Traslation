@@ -1,0 +1,41 @@
+	跨字段查询也是一个常见的模式，比如person,product,address之类的实体，标志性的信息分散在多个字段中。比如person实体可能会被索引为：
+	{
+	    "firstname":  "Peter",
+	    "lastname":   "Smith"
+	}
+	或者address:
+	{
+	    "street":   "5 Poland Street",
+	    "city":     "London",
+	    "country":  "United Kingdom",
+	    "postcode": "W1V 3DG"
+	}
+	这和之前提到的多查询字串很类似，不过着两个场景有一个很大的不同。在多查询字串中，对每个字段使用分离的查询字串。而这里，我们希望在一个查询字串中查询多个字段。
+	用户可能会搜索Perter Smith来找人，每个单词都出现在不同的字段中，所以使用dis_max/best_fields当然是不行的。
+	我们希望按照字段顺序逐个匹配并且把得分加总，听起来使用bool查询是一个不错的方法：
+	{
+	  "query": {
+	    "bool": {
+	      "should": [
+	        { "match": { "street":    "Poland Street W1V" }},
+	        { "match": { "city":      "Poland Street W1V" }},
+	        { "match": { "country":   "Poland Street W1V" }},
+	        { "match": { "postcode":  "Poland Street W1V" }}
+	      ]
+	    }
+	  }
+	}
+	对每个字段都使用同样的查询字串实在是让人烦躁，这时可以使用multi_match来使得书写简化，并且把类型设置为most_fields来告诉查询把所有的匹配字段的得分进行加总：
+	{
+	  "query": {
+	    "multi_match": {
+	      "query":       "Poland Street W1V",
+	      "type":        "most_fields",
+	      "fields":      [ "street", "city", "country", "postcode" ]
+	    }
+	  }
+	}
+	most_fields方法对实体查询的处理有一些不是很明显的问题：
+	1.它是设计来查询匹配字段最多的查询字串，而不是匹配跨字段关联程度最大的文档
+	2.它不能使用operator或者minimum_should_match参数来减少匹配度低的文档
+	3.每个字段的短语频率都不一样，这可能会相互影响导致结果排序不正确。
