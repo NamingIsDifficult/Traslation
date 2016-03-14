@@ -1,0 +1,90 @@
+	全文搜索需要在准确性和全面性之间权衡。目标是在第一页的结果中列出用户认为最匹配的文档。
+	为了提高全面性，我们将网眼增大了，不单单把完全匹配的文档加进来，还会匹配我们认为相关的文档。如果用户查询的是“quick brown fox,”，那么包含fast foxes的文档应该也有理由被返回。
+	如果相关的文档只有包含fast foxes的这一个的话，它会出现在列表的最顶部。当然，如果有100个文档包含quick brown fox，那这个文档可能会被认为关联度很低，我们希望把它放在列表的末尾处。在包含了许多潜在的匹配项之后，我们要做的是把最佳匹配的那一个提升到顶部。
+	一个用于调整全文搜索关联分数的常用方法是把相同的文本按照多种索引方式索引，每一个都提高了不同的关联信号。最主要的字段将会包含广义上要匹配的短语已获取尽可能多的匹配文档。比如：
+	1.使用词根还原来索引jumps,jumping,jumped至它们的根格式：jump。然后它并不关心用户搜索的格式，因为总会被还原为词根再去做匹配。
+	2.包含同义词leap,hop,jump
+	3.移除发音符号或者音调
+	但是，如果有两个文档，一个包含jumped，另一个包含jumping，用户可能会觉得第一个更加匹配，因为它就是用户想要搜索的词。这时候就可以发挥之前索引的多个文档的作用了，这些文档将会提供精确度上的帮助。这些字段表现的就像是可以提高关联分的信号一样，匹配的字段越多，分数就相对要高。
+	如果一个文档在主要字段上匹配的话就会出现在结果列表中，如果它还匹配了信号字段，那么就可以得到额外的得分，使得排序得以提高。
+	稍后的章节会详细介绍同义词，相近词，部分匹配和其它潜在的信号。不过我们会使用简单的还原为词根的和未还原过的字段来展示这个技术。
+	首先要做的是将字段索引两次：一个是词根的格式，另一个是原始的格式，这里会使用multifields：
+	DELETE /my_index
+
+	PUT /my_index
+	{
+	    "settings": { "number_of_shards": 1 }, 
+	    "mappings": {
+	        "my_type": {
+	            "properties": {
+	                "title": { 
+	                    "type":     "string",
+	                    "analyzer": "english",
+	                    "fields": {
+	                        "std":   { 
+	                            "type":     "string",
+	                            "analyzer": "standard"
+	                        }
+	                    }
+	                }
+	            }
+	        }
+	    }
+	}
+	接下来索引两个文档：
+	PUT /my_index/my_type/1
+	{ "title": "My rabbit jumps" }
+	
+	PUT /my_index/my_type/2
+	{ "title": "Jumping jack rabbits" }
+	然后在运行一个简单的查询：
+	GET /my_index/_search
+	{
+	   "query": {
+	        "match": {
+	            "title": "jumping rabbits"
+	        }
+	    }
+	}
+	经过分词器还原后，变成要匹配jump和rabbit两个词根，两个文档的title字段都包含着两个短语，所以他们都会匹配并且分数一样。
+	如果只是对title.std字段进行查询的话，那么只有文档2会匹配，但是，如果对两个字段进行查询并且使用bool查询把分数整合的话，两个文档都匹配并且文档2的得分会更高：
+	GET /my_index/_search
+	{
+	   "query": {
+	        "multi_match": {
+	            "query":  "jumping rabbits",
+	            "type":   "most_fields", //为了计算所有匹配字段的得分使用这个类型，子句将会被包含在布尔查询而不是dis_max查询中
+	            "fields": [ "title", "title.std" ]
+	        }
+	    }
+	}
+	响应如下：
+	{
+	  "hits": [
+	     {
+	        "_id": "2",
+	        "_score": 0.8226396, //文档2的得分要高得多
+	        "_source": {
+	           "title": "Jumping jack rabbits"
+	        }
+	     },
+	     {
+	        "_id": "1",
+	        "_score": 0.10741998, 
+	        "_source": {
+	           "title": "My rabbit jumps"
+	        }
+	     }
+	  ]
+	}
+	我们使用大范围的匹配字段title来把尽可能多的文档包含进来，然后使用title.std字段作为信号提升匹配度更高的文档的得分。每个字段对最终结果的贡献可以通过指定boost数值来控制权重，比如把title字段的权重大大提高，这样就相对的降低信号字段的权重：
+	GET /my_index/_search
+	{
+	   "query": {
+	        "multi_match": {
+	            "query":       "jumping rabbits",
+	            "type":        "most_fields",
+	            "fields":      [ "title^10", "title.std" ] 
+	        }
+	    }
+	}
