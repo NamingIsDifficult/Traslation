@@ -1,0 +1,72 @@
+	假如用户查询的是 “quick pets”的话，两个文档都有quick，但是只有文档2有pets，而且它们都是分别匹配在不同字段的。一个简单的dis_max查询将会选择最佳匹配的字段，并且忽略其他的字段：
+	{
+	    "query": {
+	        "dis_max": {
+	            "queries": [
+	                { "match": { "title": "Quick pets" }},
+	                { "match": { "body":  "Quick pets" }}
+	            ]
+	        }
+	    }
+	}
+	响应如下：
+	{
+	  "hits": [
+	     {
+	        "_id": "1",
+	        "_score": 0.12713557, 
+	        "_source": {
+	           "title": "Quick brown rabbits",
+	           "body": "Brown rabbits are commonly seen."
+	        }
+	     },
+	     {
+	        "_id": "2",
+	        "_score": 0.12713557, 
+	        "_source": {
+	           "title": "Keeping pets healthy",
+	           "body": "My quick brown fox eats rabbits on a regular basis."
+	        }
+	     }
+	   ]
+	}
+	文档1和2的得分是一样的。如果需要让同时匹配多个字段的文档得分要比只匹配单个字段（得分一样）的文档排的靠前些的话，不要使用dis_max查询，因为它只计算一个字段的得分。
+	不过可以通过使用tie_breaker参数来使得其它匹配的字段也被计算到得分中去：
+	{
+	    "query": {
+	        "dis_max": {
+	            "queries": [
+	                { "match": { "title": "Quick pets" }},
+	                { "match": { "body":  "Quick pets" }}
+	            ],
+	            "tie_breaker": 0.3
+	        }
+	    }
+	}
+	响应如下：
+	{
+	  "hits": [
+	     {
+	        "_id": "2",
+	        "_score": 0.14757764, 
+	        "_source": {
+	           "title": "Keeping pets healthy",
+	           "body": "My quick brown fox eats rabbits on a regular basis."
+	        }
+	     },
+	     {
+	        "_id": "1",
+	        "_score": 0.124275915, 
+	        "_source": {
+	           "title": "Quick brown rabbits",
+	           "body": "Brown rabbits are commonly seen."
+	        }
+	     }
+	   ]
+	}
+	文档2现在要比文档1的得分高了一些。这是因为tie_breaker参数使得dis_max查询的行为处于布尔查询和dis_max查询之间，它把得分计算修改为：
+	1.获取最佳匹配字段的得分
+	2.将其它匹配的字段的得分都乘上tie_breaker指定的数值
+	3.加总并且规范化
+	通过这个参数的加权，所有匹配字段都将对得分有所贡献。
+	这个参数的值可以设定为0-1之间的任意浮点数。具体数值是实际状况而定，不过比较合适的值要尽量接近0，比如0.1-0.4，这是为了不对dis_max查询的本质产生过多的干扰。
