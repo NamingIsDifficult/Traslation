@@ -1,0 +1,49 @@
+	multi_match查询对多个字段运行的查询提供了一个便捷的方法。有多种multi_match查询，其中三个在之前的章节提及过：best_fields,most_fields,cross_fields。默认情况下，使用best_fields类型，主体是dis_max查询：
+	{
+	  "dis_max": {
+	    "queries":  [
+	      {
+	        "match": {
+	          "title": {
+	            "query": "Quick brown fox",
+	            "minimum_should_match": "30%"
+	          }
+	        }
+	      },
+	      {
+	        "match": {
+	          "body": {
+	            "query": "Quick brown fox",
+	            "minimum_should_match": "30%"
+	          }
+	        }
+	      },
+	    ],
+	    "tie_breaker": 0.3
+	  }
+	}
+	通过multi_match可以写的更简便一些：
+	{
+	    "multi_match": {
+	        "query":                "Quick brown fox",
+	        "type":                 "best_fields", 
+	        "fields":               [ "title", "body" ],
+	        "tie_breaker":          0.3,
+	        "minimum_should_match": "30%" 
+	    }
+	}
+	字段名称可以使用通配符：任意匹配通配符格式的字段都回被包含到查询中：
+	{
+	    "multi_match": {
+	        "query":  "Quick brown fox",
+	        "fields": "*_title"
+	    }
+	}
+	可以使用^符号提升特定的字段：在字段名后面添加^boost，boost可以是浮点数，默认是1：
+	{
+	    "multi_match": {
+	        "query":  "Quick brown fox",
+	        "fields": [ "*_title", "chapter_title^2" ] 
+	    }
+	}
+	
