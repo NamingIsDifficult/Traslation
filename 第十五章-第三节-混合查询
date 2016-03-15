@@ -1,0 +1,30 @@
+	如果要按照严格的词组去匹配的话，那么未免太严格了一些。包含“quick brown fox” 有时候也需要匹配词组“quick fox,”，即使位置并不是完全一致。我们可以使用slop参数来添加词组位置的弹性：
+	GET /my_index/my_type/_search
+	{
+	    "query": {
+	        "match_phrase": {
+	            "title": {
+	                "query": "quick fox",
+	                "slop":  1
+	            }
+	        }
+	    }
+	}
+	这个参数告诉match_phrase查询短语之间的间隔最多可以是多少个词。间隔指的是如果要把文档中的词挪动多少次才能和查询匹配。
+	先使用一个简单的例子来说明。为了使quick fox匹配包含 quick brown fox的文档，那么需要使slop的值为1：
+	            Pos 1         Pos 2         Pos 3
+	-----------------------------------------------
+	Doc:        quick         brown         fox
+	-----------------------------------------------
+	Query:      quick         fox
+	Slop 1:     quick                 ↳     fox
+	即使使用slop参数，所有的词也都需要在词组匹配中出现，不过单词并不必须按照查询的顺序也能匹配。使用足够高的slop值，单词的间隔可以是任意距离，比如设置slop为3：
+	            Pos 1         Pos 2         Pos 3
+	-----------------------------------------------
+	Doc:        quick         brown         fox
+	-----------------------------------------------
+	Query:      fox           quick
+	Slop 1:     fox|quick  ↵  //这里两个词出现的位置一样
+	Slop 2:     quick      ↳  fox
+	Slop 3:     quick                 ↳     fox
+	
