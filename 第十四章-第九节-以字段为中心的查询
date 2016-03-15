@@ -1,0 +1,62 @@
+	前文所提及的三种问题都是由于most_fields查询这种以字段为中心而不是以短语为中心的方式导致的。best_fields类型也是以字段为中心的，所以也有相应的问题。它们从最匹配的字段中做查找，而实际上我们想要的是最匹配的短语。
+	首先先列一下这些问题存在的原因，然后再看看要如何与之对抗。
+	1.在多个字段中匹配相同的单词
+	回忆一下most_fields的执行顺序：Elasticsearch对每个字段生成隔离的match查询然后将它们包裹在一个bool查询中，可以通过使用validate-query API来查看：
+	GET /_validate/query?explain
+	{
+	  "query": {
+	    "multi_match": {
+	      "query":   "Poland Street W1V",
+	      "type":    "most_fields",
+	      "fields":  [ "street", "city", "country", "postcode" ]
+	    }
+	  }
+	}
+	生成如下解释explanation:
+	(street:poland   street:street   street:w1v)
+	(city:poland     city:street     city:w1v)
+	(country:poland  country:street  country:w1v)
+	(postcode:poland postcode:street postcode:w1v)
+	按照得分计算算法，如果两个字段匹配一个词的话，会比一个字段匹配两个词的得分高。
+	2.无关项很多
+	前文提及的使用and操作符或者minimum_should_match参数来把关联程度较低的结果去除：
+	{
+	    "query": {
+	        "multi_match": {
+	            "query":       "Poland Street W1V",
+	            "type":        "most_fields",
+	            "operator":    "and", //所有短语都要出现
+	            "fields":      [ "street", "city", "country", "postcode" ]
+	        }
+	    }
+	}
+	但是，使用best_fields或者most_fields的时候，这些参数会被下发到生成的match查询中，解释如下：
+	(+street:poland   +street:street   +street:w1v)
+	(+city:poland     +city:street     +city:w1v)
+	(+country:poland  +country:street  +country:w1v)
+	(+postcode:poland +postcode:street +postcode:w1v)
+	换句话说，使用and操作符意味着所有的短语必须在同一个字段中出现，显然和我们设想的不一样。
+	3.短语频率计算不均衡
+	默认的关联分是使用TF/IDF计算的，当使用多字段查询的时候，TF/IDF可能会引入一些奇怪的结果。想象一下，对first_name和last_name字段查找 “Peter Smith” .Peter是一个常用的名字，而Smith也是一个常用的姓，这两个词的IDF都可能比较低。但如果有另外一个叫Smith Williams的人名索引进来的话，Smith作为名字是不常用的，这个IDF应该是比较高的。
+	下面的查询可以很好的解释这个不同所造成的影响，本着第二个人要比第一个更为匹配的原则，Smith要比Perter的排序靠前：
+	{
+	    "query": {
+	        "multi_match": {
+	            "query":       "Peter Smith",
+	            "type":        "most_fields",
+	            "fields":      [ "*_name" ]
+	        }
+	    }
+	}
+	smith在名字中的IDF得分过高，导致它覆盖了名字为peter，姓为smith的低IDF得分。
+	这些问题的根源在于我们是以多字段为中心处理的。如果将这些字段整合到一个字段的话，这些问题就会消失。我们可以通过添加一个full_name字段来解决问题：
+	{
+	    "first_name":  "Peter",
+	    "last_name":   "Smith",
+	    "full_name":   "Peter Smith"
+	}
+	当只对full_name字段查询的时候：
+	1.匹配短语越多的文档会胜过匹配短语少但是词频高的文档
+	2.minimum_should_match和operator参数将会按照预计的效果执行
+	3.idf将会因为字段联合而不需在意短语出现在哪个字段。
+	虽然这样可以消除问题，但是必须要存储多余的数据。事实上,Elasticsearch提供了两种解决方案，一个是在索引的时候，另外一个是在搜索的时候。
