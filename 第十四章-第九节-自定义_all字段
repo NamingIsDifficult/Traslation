@@ -1,0 +1,24 @@
+	在元数据中的_all字段中，我们解释了特定的_all字段把所有其他字段的值索引为一个大字符串，尽管把所有字段索引到一个字段并不是特别的方便。不过有这个一个自定义的_all字段包含人名之类的实体，一个自定义的_all字段包含地址实体的话将会很有用。
+	Elasticsearch提供了这样的功能，使用copy_to参数来进行映射：
+	PUT /my_index
+	{
+	    "mappings": {
+	        "person": {
+	            "properties": {
+	                "first_name": {
+	                    "type":     "string",
+	                    "copy_to":  "full_name" 
+	                },
+	                "last_name": {
+	                    "type":     "string",
+	                    "copy_to":  "full_name" 
+	                },
+	                "full_name": {
+	                    "type":     "string"
+	                }
+	            }
+	        }
+	    }
+	}
+	在有这个映射的时候，就可以有目的的去查询名字的名和姓两部分，或者完整的名字。
+	first_name和last_name都不需要负责full_name的索引方式。full_name字段从两个字段中复制出他们的值，然后按照本身的映射进行索引。
