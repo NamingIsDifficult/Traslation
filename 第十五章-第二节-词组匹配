@@ -1,0 +1,54 @@
+	match查询是基本全文搜索的起始，match_phrase则是查找临近词语的开端：
+	GET /my_index/my_type/_search
+	{
+	    "query": {
+	        "match_phrase": {
+	            "title": "quick brown fox"
+	        }
+	    }
+	}
+	和match查询一样，match_phrase查询首先把查询字串分析为一个短语列表。然后它查找所有的短语，但是只保留包含所有短语且相对位置相同的文档，查询词组quick fox将不会匹配示例中的任何文档，因为没有文档包含在quick后紧跟着fox的词组。
+	match_phrase也可以被写成match查询，不过要把type设置为phrase:
+	"match": {
+	    "title": {
+	        "query": "quick brown fox",
+	        "type":  "phrase"
+	    }
+	}
+	当一个字串被分析的时候，分析器不单单会返回短语列表，也会包含短语在原始字串的位置，排序：
+	GET /_analyze?analyzer=standard
+	Quick brown fox
+	响应如下：
+	{
+	   "tokens": [
+	      {
+	         "token": "quick",
+	         "start_offset": 0,
+	         "end_offset": 5,
+	         "type": "<ALPHANUM>",
+	         "position": 1 
+	      },
+	      {
+	         "token": "brown",
+	         "start_offset": 6,
+	         "end_offset": 11,
+	         "type": "<ALPHANUM>",
+	         "position": 2 
+	      },
+	      {
+	         "token": "fox",
+	         "start_offset": 12,
+	         "end_offset": 15,
+	         "type": "<ALPHANUM>",
+	         "position": 3 
+	      }
+	   ]
+	}
+	位置可以被存储在反向索引中，对位置敏感的查询可以使用这些数据来匹配按照指定顺序紧密排列的文档。
+	对于可以匹配词组 “quick brown fox,”的文档来说，以下几点是肯定的：
+	1.这三个单词都必须出现在同一个字段
+	2.brown的位置必然要大于quick
+	3.fox的位置又要大于其它的词
+	如果这几个要求中的任意一点不匹配的，文档就不会匹配查询。
+	在搜索引擎内部，match_phrase查询使用底层span查询一族来做位置敏感匹配。跨度查询是短语级别的查询，所以他们没有分析阶段，它们会查找短语的精确状态。
+	大多数用户不需要直接使用span产寻,因为match_phrase查询已经够用了。但是，对于特定的字段，比如按模式查询，将会使用这些底层查询来执行特别针对的，精致的位置查询
