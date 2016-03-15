@@ -1,0 +1,40 @@
+	当你在多值字段上使用词组匹配的时候可能会发生一些奇怪的事，假设有这样的文档：
+	PUT /my_index/groups/1
+	{
+	    "names": [ "John Abraham", "Lincoln Smith"]
+	}
+	然后对Abraham Lincoln做词组查询：
+	GET /my_index/groups/_search
+	{
+	    "query": {
+	        "match_phrase": {
+	            "names": "Abraham Lincoln"
+	        }
+	    }
+	}
+	结果表明文档竟然匹配了！即使这两个单词只是分别匹配到了词组中的两个项。原因和词组在Elasticsearch中的索引方式有关：
+	当John Abraham被分析的时候，生成以下反向索引：
+	Position 1: john
+	Position 2: abraham
+	Lincoln Smith：
+	Position 3: lincoln
+	Position 4: smith
+	换句话说，Elasticsearch对于John Abraham Lincoln Smith这样的一个字串分析后产生的短语列表时一样的。示例中的查询会查看abraham是不是在lincoln后面，而这两个短语又确实存在，而且还相邻，所以就匹配了。
+	所幸有一个简单的变通方法来处理这种情形，即position_offset_gap，这需要在字段映射中配置：
+	DELETE /my_index/groups/ 
+
+	PUT /my_index/_mapping/groups 
+	{
+	    "properties": {
+	        "names": {
+	            "type":                "string",
+	            "position_offset_gap": 100
+	        }
+	    }
+	}
+	这个参数设置告诉Elasticsearch在每个新的数组元素索引的时候自动在之前的位置值上加上指定的值。所以索引之前的数组的时候，短语的位置就不一样了：
+	Position 1: john
+	Position 2: abraham
+	Position 103: lincoln
+	Position 104: smith
+	这样词组匹配就不会再匹配到这个文档了，除非你把slop设置为100
