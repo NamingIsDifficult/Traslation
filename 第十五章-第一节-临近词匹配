@@ -1,0 +1,7 @@
+	基本的全文搜索是指把使用TF/IDF处理文档或者至少是文档内部的各个字段当作是一大堆的单词。match查询可以告诉我们这里面有没有我们要查找的词，但它不能告诉我们这些词的联系。
+	考虑以下各个句子的区别：
+	Sue ate the alligator.
+	The alligator ate Sue.
+	Sue never goes anywhere without her alligator-skin purse.
+	通过match查询查找sue alligator将会匹配这三个文档，但它不会告诉我们这两个词的组合是否都意味着同一个解释。
+	单词是怎么相互联系的是一个很复杂的问题，这并不能通过使用另外一种查询来解决。不过我们可以至少找出因为相距较近而产生联系的单词。每个文档都可能会比之前提供的例子要长很多:Sue和alligator可能会被其它文本隔离。我们希望把相隔较近的文档的得分相对的打高一些。
