@@ -1,0 +1,18 @@
+	在结束多字段查询之前，我们还要再谈谈not_analyzed字段中的精确值。在multi_match查询中把分析过的字段和未分析过的字段混在一起可不太好使。原因在解释中清晰的显示出来，假设title字段是未分析的：
+	GET /_validate/query?explain
+	{
+	    "query": {
+	        "multi_match": {
+	            "query":       "peter smith",
+	            "type":        "cross_fields",
+	            "fields":      [ "title", "first_name", "last_name" ]
+	        }
+	    }
+	}
+	因为title字段是未分析的，它会按照字段是否匹配整个查询字串来计算：
+	title:peter smith
+	(
+	    blended("peter", fields: [first_name, last_name])
+	    blended("smith", fields: [first_name, last_name])
+	)
+	这个短语在title字段的反向索引中显然是不存在的，他不可能被找到，所以尽量避免使用这种查找。
