@@ -1,0 +1,32 @@
+	鉴于词组查询会简单粗暴的把不包含指定词组的文档排除掉，那么临近查询指的是slop比0大的词组查询，而单词间距将会对最终的关联分数产生影响。如果slop的值比较高，比如50-100，那么只有间隔足够大的文档会被排除，但是间隔越小的文档得分也越高。
+	以下对quick dog词组的临近查询匹配了包含这两个单词的文档，如果间隔小的话，得分会高：
+	POST /my_index/my_type/_search
+	{
+	   "query": {
+	      "match_phrase": {
+	         "title": {
+	            "query": "quick dog",
+	            "slop":  50 
+	         }
+	      }
+	   }
+	}
+	响应如下：
+	{
+	  "hits": [
+	     {
+	        "_id":      "3",
+	        "_score":   0.75, //间隔近的得分高
+	        "_source": {
+	           "title": "The quick brown fox jumps over the quick dog"
+	        }
+	     },
+	     {
+	        "_id":      "2",
+	        "_score":   0.28347334, 
+	        "_source": {
+	           "title": "The quick brown fox jumps over the lazy dog"
+	        }
+	     }
+	  ]
+	}
