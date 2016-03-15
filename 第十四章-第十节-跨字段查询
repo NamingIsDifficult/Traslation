@@ -1,0 +1,57 @@
+	自定义_all字段是一个不错的方法，不过得在你索引文档前就想到它。不过Elasticsearch也提供了在搜索阶段来解决这个问题的方案：multi_match查询中指定类型为cross_fields。这个类型使用的是以短语为中心的匹配，和其它以字段为中心的匹配相比大不一样。它把所有的字段当作是一个大字段，然后查找相应的短语。
+	为了展示以字段为中心和以短语为中心的区别，查看most_fields查询的解释：
+	GET /_validate/query?explain
+	{
+	    "query": {
+	        "multi_match": {
+	            "query":       "peter smith",
+	            "type":        "most_fields",
+	            "operator":    "and", 
+	            "fields":      [ "first_name", "last_name" ]
+	        }
+	    }
+	}
+	一个文档要匹配的话,peter和smith必须要在同一个字段中出现：
+	(+first_name:peter +first_name:smith)
+	(+last_name:peter  +last_name:smith)
+	而一个以短语为中心的方法的逻辑则是：
+	+(first_name:peter last_name:peter)
+	+(first_name:smith last_name:smith)
+	换句话说，短语peter必须出现在两个字段中，smith也一样。
+	cross_fields类型首先分析查询字串来获取短语列表，然后再任意字段中查找每个短语。这个不同点可以解决之前提到的3个问题中的两个，接下来只要处理idf的问题。
+	通过解释可以看出来，这个问题也得到了解决：
+	GET /_validate/query?explain
+	{
+	    "query": {
+	        "multi_match": {
+	            "query":       "peter smith",
+	            "type":        "cross_fields", 
+	            "operator":    "and",
+	            "fields":      [ "first_name", "last_name" ]
+	        }
+	    }
+	}
+	它通过把跨字段的文档频率混合在一起来解决短语频率的问题：
+	+blended("peter", fields: [first_name, last_name])
+	+blended("smith", fields: [first_name, last_name])
+	换句话说，它对两个字段中的smith都查找IDF，并且取其中较小的那个。这样的话，如果smith在姓中很普通的话，那么在名里也会被当作很普通。
+	为了使cross_field工作良好，所有的字段都应该有相同的分析器。分析器相同的字段会被分组为混合字段。
+	如果有不同分析链的字段被加进来的话，它们会被按照最佳字段匹配的方式添加到查询中，比如，如果添加title字段到前面的查询中，并且它的分析器与众不同，那么解释如下：
+	(+title:peter +title:smith)
+	(
+	  +blended("peter", fields: [first_name, last_name])
+	  +blended("smith", fields: [first_name, last_name])
+	)
+	这在使用operator参数和minimum_should_match参数时很重要。
+	使用跨字段查询自定义_all字段的时候可以提升特定字段的权重。对于有相同的权重的字段，就不要去配置了。但如果要使用title和description字段来搜索书籍这种情况下，你可能会想要title字段的权重更大一些，这可以使用^来提高权重：
+	GET /books/_search
+	{
+	    "query": {
+	        "multi_match": {
+	            "query":       "peter smith",
+	            "type":        "cross_fields",
+	            "fields":      [ "title^2", "description" ] 
+	        }
+	    }
+	}
+	提升权重的好处和只查询单个_all字段的好处相比，你需要合适的选用需要的那一种。
