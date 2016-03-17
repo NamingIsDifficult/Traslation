@@ -1,0 +1,157 @@
+	即便词组查询和临近词查询以及非常强大了，它们仍有薄弱的环节：限制太严格了，所有的短语都必须匹配。
+	通过slop参数得来的对单词排序的宽松也是有代价的，这将使你丢失词组之间的联系。尽管可以确定sue,alligator和ate出现的位置很近，却无法确认到底是谁吃了谁。。。
+	当单词组合出现的时候，它们所表达的意思要比离散出现的时候要多得多。以下两个字句包含的单词一样，临近程度也相近，意思却不一样：
+	I’m not happy I’m working 
+	I’m happy I’m not working
+	如果把单词按照词组来索引而不是逐个索引的话，短语包含的含义就会保留更多的上下文信息。比如：Sue ate the alligator，如果不单单只索引成单个短语：
+	["sue", "ate", "the", "alligator"]
+	也索引成词组的话：
+	["sue ate", "ate the", "the alligator"]
+	这些词组（也称作是二元词组）被称作分块。
+	分块并不强求是二元词组，你也可以索引三个词的词组。三个词的词组将会提供更高级别的准确度，但是会大大提高索引中独特短语的数量。二元词组在大多数情况下已经足够使用了。
+	当然，分块只在查询字串与文档中短语的顺序一样的时候才会有用。不过，用户倾向于使用与搜索目标类似的结构来表达搜索意图。这是一个很重要的点：只做双字母组索引是不够的，但是这个匹配可以作为计算关联得分的信号。
+	分块需要在索引阶段作为分析过程的一部分被创建。我们可以在一个字段中同时索引单词词组和二元词组，不过为了查询的时候不会相互影响，把这两种分词索引到不同的字段会更好。单词词组字段将会作为最基本的搜索，二元词组将会被用于提升关联分。
+	首先要创建一个使用shingle标志过滤器的分析器：
+	DELETE /my_index
+
+	PUT /my_index
+	{
+	    "settings": {
+	        "number_of_shards": 1,  
+	        "analysis": {
+	            "filter": {
+	                "my_shingle_filter": {
+	                    "type":             "shingle",
+	                    "min_shingle_size": 2, //默认是2
+	                    "max_shingle_size": 2, //默认是2
+	                    "output_unigrams":  false   //默认单词词组和二元词组索引在同一个字段，这里设置为不同一个
+	                }
+	            },
+	            "analyzer": {
+	                "my_shingle_analyzer": {
+	                    "type":             "custom",
+	                    "tokenizer":        "standard",
+	                    "filter": [
+	                        "lowercase",
+	                        "my_shingle_filter" 
+	                    ]
+	                }
+	            }
+	        }
+	    }
+	}
+	现在使用analyze API来测试一下这个自定义分析器：
+	GET /my_index/_analyze?analyzer=my_shingle_analyzer
+	Sue ate the alligator
+	响应如下：
+	sue ate
+	ate the
+	the alligator
+	生成了3个二元词组，接下来就可以对一个字段使用这个新分析器了。
+	PUT /my_index/_mapping/my_type
+	{
+	    "my_type": {
+	        "properties": {
+	            "title": {//字段被定义为多字段
+	                "type": "string",
+	                "fields": {
+	                    "shingles": {
+	                        "type":     "string",
+	                        "analyzer": "my_shingle_analyzer"
+	                    }
+	                }
+	            }
+	        }
+	    }
+	}
+	这个映射生效之后，文档的title字段就会被索引为两个字段title(单词词组)和title.shingles(二元词组),这意味着我们可以分别对它们进行查询。最后再索引测试文档到索引中：
+	POST /my_index/my_type/_bulk
+	{ "index": { "_id": 1 }}
+	{ "title": "Sue ate the alligator" }
+	{ "index": { "_id": 2 }}
+	{ "title": "The alligator ate Sue" }
+	{ "index": { "_id": 3 }}
+	{ "title": "Sue never goes anywhere without her alligator skin purse" }
+	为了理解多出来的shingles字段的作用，首先看一下使用Match查询The hungry alligator ate Sue的结果：
+	GET /my_index/my_type/_search
+	{
+	   "query": {
+	        "match": {
+	           "title": "the hungry alligator ate sue"
+	        }
+	   }
+	}
+	查询返回了所有的文档，而且文档1和文档2的得分一样，因为它们包含的单词一样：
+	{
+	  "hits": [
+	     {
+	        "_id": "1",
+	        "_score": 0.44273707, 
+	        "_source": {
+	           "title": "Sue ate the alligator"
+	        }
+	     },
+	     {
+	        "_id": "2",
+	        "_score": 0.44273707, 
+	        "_source": {
+	           "title": "The alligator ate Sue"
+	        }
+	     },
+	     {
+	        "_id": "3", //通过设置minimum_should_match可以排除这个文档
+	        "_score": 0.046571054,
+	        "_source": {
+	           "title": "Sue never goes anywhere without her alligator skin purse"
+	        }
+	     }
+	  ]
+	}
+	现在我们在把shingles字段添加到查询中，注意，这个字段加进来是为了用于提高更加匹配的文档的关联分的，所以需要包含之前的title字段的查询：
+	GET /my_index/my_type/_search
+	{
+	   "query": {
+	      "bool": {
+	         "must": {
+	            "match": {
+	               "title": "the hungry alligator ate sue"
+	            }
+	         },
+	         "should": {
+	            "match": {
+	               "title.shingles": "the hungry alligator ate sue"
+	            }
+	         }
+	      }
+	   }
+	}
+	这次依旧会匹配所有的文档，但是文档2的得分显然要比文档1高了，因为它还包含区块中的短语ate sue。
+	{
+	  "hits": [
+	     {
+	        "_id": "2",
+	        "_score": 0.4883322,
+	        "_source": {
+	           "title": "The alligator ate Sue"
+	        }
+	     },
+	     {
+	        "_id": "1",
+	        "_score": 0.13422975,
+	        "_source": {
+	           "title": "Sue ate the alligator"
+	        }
+	     },
+	     {
+	        "_id": "3",
+	        "_score": 0.014119488,
+	        "_source": {
+	           "title": "Sue never goes anywhere without her alligator skin purse"
+	        }
+	     }
+	  ]
+	}
+	即便查询中包含单词hungry这个在每个文档中都不曾出现的词，我们依旧努力使用临近词来返回最为匹配的文档。
+	分块策略不单单要比词组查询方便，性能也要好得多，因为分块查询和短语查询本质是一样的，唯一多出来的花销是索引阶段需要索引更多地短语，而且也会消耗更多的磁盘空间。不过，大多数的应用都只会写入1次，然后都是读取操作，所以这样的优化还是很有用的。
+	这是一个你在Elasticsearch中会频繁碰到的情景：无需有任何的前置设置就使你在搜索的时候得到更多的功效。一旦你对自己的需求了解的更深入，你就可以通过在索引阶段更好的组织数据模型来获取更好的性能。
+	
