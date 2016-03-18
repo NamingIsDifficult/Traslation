@@ -1,0 +1,177 @@
+	在索引阶段设置即输入即搜索的第一步是定义分析链，先定义一个自定义的edge_ngram标记过滤器，我们将之命名为autocomplete_filter:
+	{
+	    "filter": {
+	        "autocomplete_filter": {
+	            "type":     "edge_ngram",
+	            "min_gram": 1,
+	            "max_gram": 20
+	        }
+	    }
+	}
+	这个配置的意思是，对于该过滤器接收的任意一个短语，它将会从单词的前头开始生成长度为1-20连词。接下来在分析器中加入这个过滤器：
+	{
+	    "analyzer": {
+	        "autocomplete": {
+	            "type":      "custom",
+	            "tokenizer": "standard",
+	            "filter": [
+	                "lowercase",
+	                "autocomplete_filter" 
+	            ]
+	        }
+	    }
+	}
+	这个分析器将会使用基本分词器把输入字串分词为单个短语，并且小写化，然后度每个短语生成相应的边缘连词。
+	完整的创建索引的请求以及过滤器和分析器的初始化如下：
+	PUT /my_index
+	{
+	    "settings": {
+	        "number_of_shards": 1, 
+	        "analysis": {
+	            "filter": {
+	                "autocomplete_filter": { 
+	                    "type":     "edge_ngram",
+	                    "min_gram": 1,
+	                    "max_gram": 20
+	                }
+	            },
+	            "analyzer": {
+	                "autocomplete": {
+	                    "type":      "custom",
+	                    "tokenizer": "standard",
+	                    "filter": [
+	                        "lowercase",
+	                        "autocomplete_filter" 
+	                    ]
+	                }
+	            }
+	        }
+	    }
+	}
+	通过使用analyze API来测试这个分析器：
+	GET /my_index/_analyze?analyzer=autocomplete
+	quick brown
+	结果如下：
+	q
+	qu
+	qui
+	quic
+	quick
+	b
+	br
+	bro
+	brow
+	brown
+	为了使用这个分析器，我们需要将它应用于某个字段，这可以使用update_mapping API：
+	PUT /my_index/_mapping/my_type
+	{
+	    "my_type": {
+	        "properties": {
+	            "name": {
+	                "type":     "string",
+	                "analyzer": "autocomplete"
+	            }
+	        }
+	    }
+	}
+	再索引部分测试文档：
+	POST /my_index/my_type/_bulk
+	{ "index": { "_id": 1            }}
+	{ "name": "Brown foxes"    }
+	{ "index": { "_id": 2            }}
+	{ "name": "Yellow furballs" }
+	然后再使用match查询测试：
+	GET /my_index/my_type/_search
+	{
+	    "query": {
+	        "match": {
+	            "name": "brown fo"
+	        }
+	    }
+	}
+	这时两个文档都会匹配，即使文档2根本不包含相关的单词：
+	{
+
+	  "hits": [
+	     {
+	        "_id": "1",
+	        "_score": 1.5753809,
+	        "_source": {
+	           "name": "Brown foxes"
+	        }
+	     },
+	     {
+	        "_id": "2",
+	        "_score": 0.012520773,
+	        "_source": {
+	           "name": "Yellow furballs"
+	        }
+	     }
+	  ]
+	}
+	使用validate-query API来验证：
+	GET /my_index/my_type/_validate/query?explain
+	{
+	    "query": {
+	        "match": {
+	            "name": "brown fo"
+	        }
+	    }
+	}
+	解释显示，查询对每个单词都使用边缘连词进行查找：
+	name:b name:br name:bro name:brow name:brown name:f name:fo
+	name:f 这个匹配导致文档2匹配，因为其中的furballs被索引为f,fu,fur...所以结果并不出乎意料之外。在索引阶段和搜索阶段都会使用autocomplete分析器，这在大多数情况下都是正确的使用方法。这是一种新的场景，需要对这个规则稍作修改。我们希望确保反向索引中包含每个单词的边缘连词，但我们也希望只匹配用户输入的完整的单词。这可以通过在索引时使用autocomplete分析器，而在搜索时使用standard分析器来解决：
+	GET /my_index/my_type/_search
+	{
+	    "query": {
+	        "match": {
+	            "name": {
+	                "query":    "brown fo",
+	                "analyzer": "standard" //在查询时覆盖name字段的分析器
+	            }
+	        }
+	    }
+	}
+	我们也可以通过指定name字段的index_analyzer和search_analyzer在映射表中的配置来解决这个问题。由于我们只想要改变搜索时使用的分析器，所以可以对已存的映射表作更新而无需重新索引数据：
+	PUT /my_index/my_type/_mapping
+	{
+	    "my_type": {
+	        "properties": {
+	            "name": {
+	                "type":            "string",
+	                "index_analyzer":  "autocomplete", 
+	                "search_analyzer": "standard" 
+	            }
+	        }
+	    }
+	}
+	再次使用validate-query查询，解释如下：
+	name:brown name:fo
+	这时，重新运行查询，结果中就只有文档1了。大部分的工作都在索引阶段完成了，查询阶段要做的仅仅是查找两个短语brown和fo，这笔使用match_phrase_prefix遍历短语列表要来得快的多得多。
+	使用边缘连词来实现即输入即查询非常的方便和快速。但是，有时候它也不够快。延迟在需要实时返沪结果的时候还是很敏感的。有时候最快的搜索方法就是不搜索。
+	补全功能建议这一节提供了一个完全不同的方法。你提供了一个包含所有补全项目的列表，然后在一个有限状态转换器中建立一个优化后的数据结构，它就像是一个大的图表。为了查找建议，Elasticsearch从图表的开端一个字符一个字符的按照匹配路径移动，一旦超过了用户的输入，它查找所有可能的端点来创建一个建议列表。
+	这个数据结构存活在内存中并且使得按照前缀查找极其快速，比基于短语的查询快的多得多。这是一个极为优秀的自动补全方法，尤其是对顺序相对固定的词组。
+	当单词的顺序不是那么容易预计的时候，边缘连词的实用性要高，这种特殊的解决方法在很多情况下是不适用的。
+	边缘连词方法可以被用于结构化的数据，比如邮编。当然，邮编字段需要被分析，但是你可以使用keyword分词器来把邮编当作是未分析的字段。
+	keyword分词器是无操作的分词器，它什么也不做。它通常被用于那些需要保持原有字串但是有需要经过小写化的字段。
+	以下例子使用keyword分词器把邮编字串转换为一个标记流，这时就可以使用边缘连词过滤器了：
+	{
+	    "analysis": {
+	        "filter": {
+	            "postcode_filter": {
+	                "type":     "edge_ngram",
+	                "min_gram": 1,
+	                "max_gram": 8
+	            }
+	        },
+	        "analyzer": {
+	            "postcode_index": { 
+	                "tokenizer": "keyword",
+	                "filter":    [ "postcode_filter" ]
+	            },
+	            "postcode_search": { 
+	                "tokenizer": "keyword"
+	            }
+	        }
+	    }
+	}
