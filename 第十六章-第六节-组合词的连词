@@ -1,0 +1,89 @@
+	最后来看看如何使用连词来查找有组合词的语言。德语就以将数个单词组合成一个巨大的词来表示精确而又复杂的含义而著名。比如：
+	Aussprachewörterbuch Militärgeschichte Rindfleischetikettierungsüberwachungsaufgabenübertragungsgesetz 等等。
+	有一种索引这种语言的方法是将组合词拆分为它们的组成部分，需要使用组合词过滤器。但是，这个过滤器的效果取决于组合词字典的好坏。另一个方法就是将整个词拆分为连词，匹配这些连词片段。匹配的片段越多，关联程度越高。
+	一个给定的连词滑动窗口通过单词后产生的结果可以覆盖整个单词。我们希望选择一个足够长的片段以保持单词的含义，但是又不至于使得过滤器产生过多的短语。3位长度的连词是一个不错的选择：
+	PUT /my_index
+	{
+	    "settings": {
+	        "analysis": {
+	            "filter": {
+	                "trigrams_filter": {
+	                    "type":     "ngram",
+	                    "min_gram": 3,
+	                    "max_gram": 3
+	                }
+	            },
+	            "analyzer": {
+	                "trigrams": {
+	                    "type":      "custom",
+	                    "tokenizer": "standard",
+	                    "filter":   [
+	                        "lowercase",
+	                        "trigrams_filter"
+	                    ]
+	                }
+	            }
+	        }
+	    },
+	    "mappings": {
+	        "my_type": {
+	            "properties": {
+	                "text": {
+	                    "type":     "string",
+	                    "analyzer": "trigrams" 
+	                }
+	            }
+	        }
+	    }
+	}
+	使用analyzer API测试一下：
+	GET /my_index/_analyze?analyzer=trigrams
+	Weißkopfseeadler
+	结果如下：
+	wei, eiß, ißk, ßko, kop, opf, pfs, fse, see, eea,ead, adl, dle, ler
+	索引部分文档：
+	POST /my_index/my_type/_bulk
+	{ "index": { "_id": 1 }}
+	{ "text": "Aussprachewörterbuch" }
+	{ "index": { "_id": 2 }}
+	{ "text": "Militärgeschichte" }
+	{ "index": { "_id": 3 }}
+	{ "text": "Weißkopfseeadler" }
+	{ "index": { "_id": 4 }}
+	{ "text": "Weltgesundheitsorganisation" }
+	{ "index": { "_id": 5 }}
+	{ "text": "Rindfleischetikettierungsüberwachungsaufgabenübertragungsgesetz" }
+	测试一下以下查询：
+	GET /my_index/my_type/_search
+	{
+	    "query": {
+	        "match": {
+	            "text": "Adler"//经过分析器后将会产生3个短语adl, dle, ler
+	        }
+	    }
+	}
+	响应如下：
+	{
+	  "hits": [
+	     {
+	        "_id": "3",
+	        "_score": 3.3191128,
+	        "_source": {
+	           "text": "Weißkopfseeadler"
+	        }
+	     }
+	  ]
+	}
+	这个匹配方法可能会使得不相干的文档也匹配进来，这可以通过灵活的使用minimum_should_match参数来移除干扰项。
+	GET /my_index/my_type/_search
+	{
+	    "query": {
+	        "match": {
+	            "text": {
+	                "query":                "Gesundheit",
+	                "minimum_should_match": "80%"
+	            }
+	        }
+	    }
+	}
+	这是全文搜索中的某种鸟枪法，可能会导致产生极大的反向索引，不过它确实是一种索引有连词的语言的方法。这个方法适用于提高文档的匹配数量，它通常和其它技术一起使用，作为提高准确性和关联分的一部分。
