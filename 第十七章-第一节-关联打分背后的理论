@@ -29,4 +29,56 @@
 	字段长度规范化
 	字段的长度是多少？越短，权重越高。计算方法如下：
 	norm(d) = 1 / √numTerms //字段中短语的数量的根号分之一
+	虽然字段长度规范化对全文搜索来说比较重要，很多的字段并不需要规范化。规范化过程中每个字段的每个字串消耗差不多一个字节，不论文档是否包含这个字段。not_analyzed类型的精确值字符串字段默认情况下禁用了规范化，也可以通过设置来达成相同的效果：
+	PUT /my_index
+	{
+	  "mappings": {
+	    "doc": {
+	      "properties": {
+	        "text": {
+	          "type": "string",
+	          "norms": { "enabled": false } //禁用规范化
+	        }
+	      }
+	    }
+	  }
+	}
+	对于像记日志之类的情况，规范化就没有用处了，因为这里只关心字段中是否包含指定的错误代码或是标识，字段的长度对于预计的输出没有影响。而禁用规范化则可以省下极大的内存空间。
+	这三个参数在索引阶段即被计算和存储。它们一起被用于计算文档中的短语的权重。当在方程式中言及文档的时候，其实我们指的是文档中的某个字段。每个字段都有各自的反向索引，所以在计算df/idf的时候，其实是在计算字段的响应值。
+	当对一个简单的短语查询设置explain为true的时候，你会发现被引入到分数计算的参数只有前面介绍的几种参数：
+	PUT /my_index/doc/1
+	{ "text" : "quick brown fox" }
+	
+	GET /my_index/doc/_search?explain
+	{
+	  "query": {
+	    "term": {
+	      "text": "fox"
+	    }
+	  }
+	}
+	explanation的简略概要如下：
+	weight(text:fox in 0) [PerFieldSimilarity]:  0.15342641 //文档id为0，最终打分
+	result of:
+	    fieldWeight in 0                         0.15342641
+	    product of:
+	        tf(freq=1.0), with freq of 1:        1.0 
+	        idf(docFreq=1, maxDocs=1):           0.30685282 
+	        fieldNorm(doc=0):                    0.5 
+	大部分情况下，查询都包含了超过一个的短语，所以需要一个把多种短语的权重联合到一起的方法，接下来介绍向量空间模型。
+	向量空间模型提供了一个依靠文档来对对短语查询进行比较的方法。输出是一个分数，它表明了文档和查询的匹配程度。为了达成这个目的，这个模型把文档和查询都用向量来表示。
+	一个向量就是一个一位数字数组：
+	[1,2,5,22,3,8]
+	在这个向量空间模型中，向量中的每个数表征了特定短语的权重，这将在tf/idf的计算中使用。tf/idf是向量空间模型中默认用于计算短语权重的方法，不过这并不是唯一的方法。还有诸如Okapi-BM25之类可选的方法。tf/idf因为简单有效所以被用作是默认设置，它的输出结果的质量经受住了测试的考验。
+	假设查询“happy hippopotamus.”，那么happy这样的常用词的权重将会比较低，而hippopotamus则相对不那么常用，它的权重将会高，假设happy的权重是2，hippopotamus得权重为5，那么可以将这个简单的向量在二维空间上画为一条直线，起点为0,0,终点为2,5。现在再假设有3个文档：
+	1.I am happy in summer.
+	2.After Christmas I’m a hippopotamus.
+	3.The happy hippopotamus helped Harry.
+	我们可以为每个文档也分别创建一个简单的向量，其中包含了每个查询短语--happy和hippopotamus的权重，然后在图上画上各个文档的向量：
+	Document 1: (happy,____________)—[2,0]
+	Document 2: ( ___ ,hippopotamus)—[0,5]
+	Document 3: (happy,hippopotamus)—[2,5]
+	向量的好处在于它们是可以被比较的，通过比较查询向量和文档向量的角度就可以给每个文档给定相应的关联分数。在实际应用中，只有二维向量可以被简单的画在图表上，幸运的是，线性代数提供了比对多维向量角度的方法，也就是说对于多短语的查询，也可以使用向量空间模型来计算。
+	资料：https://en.wikipedia.org/wiki/Cosine_similarity
+	
 	
