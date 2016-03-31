@@ -1,0 +1,39 @@
+	Elasticsearch的结构化查询语言是极为方便的。你可以通过把查询子句在查询结构中上下移动来使得查询的重要性得到改变。比如，想象一下这样的查询：
+	quick OR brown OR red OR fox
+	可以据此写出一个bool查询：
+	GET /_search
+	{
+	  "query": {
+	    "bool": {
+	      "should": [
+	        { "term": { "text": "quick" }},
+	        { "term": { "text": "brown" }},
+	        { "term": { "text": "red"   }},
+	        { "term": { "text": "fox"   }}
+	      ]
+	    }
+	  }
+	}
+	可是这样的查询对于包好这四个单词的文档会给出相同的得分。red和brown是同义词，也就说匹配其中的一个就可以了，所以实际上我们想要的查询是这个：
+	quick OR (brown OR red) OR fox
+	根据基本的布尔逻辑，这和原本的查询其实是一样的，但是bool查询不单单只关心是否匹配，还关心匹配的程度高低，所以更好的查询如下：
+	GET /_search
+	{
+	  "query": {
+	    "bool": {
+	      "should": [
+	        { "term": { "text": "quick" }},
+	        { "term": { "text": "fox"   }},
+	        {
+	          "bool": {
+	            "should": [
+	              { "term": { "text": "brown" }},
+	              { "term": { "text": "red"   }}
+	            ]
+	          }
+	        }
+	      ]
+	    }
+	  }
+	}
+	现在red和brown则在不同于其它子句的级别中相互竞争。
