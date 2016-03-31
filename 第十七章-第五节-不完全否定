@@ -1,0 +1,40 @@
+	在因特网上查询苹果很可能会返回苹果公司，水果和许多的菜谱。我们可以通过排除如pie,tart,crumble,tree之类的单词来把结果缩小到公司的范围，这时可以使用must_not子句：
+	GET /_search
+	{
+	  "query": {
+	    "bool": {
+	      "must": {
+	        "match": {
+	          "text": "apple"
+	        }
+	      },
+	      "must_not": {
+	        "match": {
+	          "text": "pie tart fruit crumble tree"
+	        }
+	      }
+	    }
+	  }
+	}
+	但是这样的设置很可能使得查询意外的排除了关联程度很高的文档，must_not子句还是太过严格。
+	使用boosting查询可以解决这个问题。它允许我们依旧包含出现过水果或者高点的结果，但是把它们进行降级处理，排序将会比其它的文档更低：
+	GET /_search
+	{
+	  "query": {
+	    "boosting": {
+	      "positive": {
+	        "match": {
+	          "text": "apple"
+	        }
+	      },
+	      "negative": {
+	        "match": {
+	          "text": "pie tart fruit crumble tree"
+	        }
+	      },
+	      "negative_boost": 0.5
+	    }
+	  }
+	}
+	boosting查询接收一个positive查询和一个negative查询。只有匹配positive查询的文档会被加入到结果集中，但是如果它还匹配了negative查询的话，就会把文档的得分与设置的negative_boost值相乘获得最后的得分。
+	所以要使得这个查询达到预期的目的，negative_boost的值必须要小于1.在这个例子中，匹配到负向子句的文档得分将会被减半。
