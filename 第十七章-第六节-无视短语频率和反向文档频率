@@ -1,0 +1,90 @@
+	有的时候我们并不需要tf/idf的参与，我们只想知道某个字段是否包含指定的单词。比如我们要查找一个尽量多的包含以下条件的房子来度假：
+	1.wifi
+	2.花园
+	3.泳池
+	度假房的文档格式如下：
+	{ "description": "A delightful four-bedroomed house with ... " }
+	这时可以使用简单的查询：
+	GET /_search
+	{
+	  "query": {
+	    "match": {
+	      "description": "wifi garden pool"
+	    }
+	  }
+	}
+	但是这并不是真正的全文搜索，在这个例子中，tf/idf只是碍事罢了。我们并不关心wifi是不是常用词，我们只关心它们是不是出现。实际上，我们想要的是按照匹配特性的数量的多少进行排序，越多越好。如果一个特征出现了，就是1，否则为0.
+	现在来看看constant_score查询，这个查询可以包裹一个查询或者一个过滤器，并且给任意匹配的文档打1分，而不计算tf/idf：
+	GET /_search
+	{
+	  "query": {
+	    "bool": {
+	      "should": [
+	        { "constant_score": {
+	          "query": { "match": { "description": "wifi" }}
+	        }},
+	        { "constant_score": {
+	          "query": { "match": { "description": "garden" }}
+	        }},
+	        { "constant_score": {
+	          "query": { "match": { "description": "pool" }}
+	        }}
+	      ]
+	    }
+	  }
+	}
+	如果特性的权重有所不同的话，可以提升相应的子句的权重来使之得分更高：
+	GET /_search
+	{
+	  "query": {
+	    "bool": {
+	      "should": [
+	        { "constant_score": {
+	          "query": { "match": { "description": "wifi" }}
+	        }},
+	        { "constant_score": {
+	          "query": { "match": { "description": "garden" }}
+	        }},
+	        { "constant_score": {
+	          "boost":   2 //此项匹配的话将会得两分，而其它子句只能得一分
+	          "query": { "match": { "description": "pool" }}
+	        }}
+	      ]
+	    }
+	  }
+	}
+	最终结果并不是简单的对所有子句的值做加总，协作参数和查询规范化参数人就会参与到计算过程中。我们可以通过对度假房文档添加一个not_analyzed features字段来提高搜索的质量
+	{ "features": [ "wifi", "pool", "garden" ] }
+	默认情况下，一个未分析的字段的字段长度规范化过程是被禁止的并且其index_options参数被设置为docs，这禁止了短语频率计算，但是问题还是存在的：每个短语的反向文档频率还是会计算的。这时可以使用constant_score查询的方法来禁止：
+	GET /_search
+	{
+	  "query": {
+	    "bool": {
+	      "should": [
+	        { "constant_score": {
+	          "query": { "match": { "features": "wifi" }}
+	        }},
+	        { "constant_score": {
+	          "query": { "match": { "features": "garden" }}
+	        }},
+	        { "constant_score": {
+	          "boost":   2
+	          "query": { "match": { "features": "pool" }}
+	        }}
+	      ]
+	    }
+	  }
+	}
+	尽管如此，这些特性其实都应该按照过滤器来处理，一个度假房是否包含某种特性之类的请求非常适合过滤器的发挥，而且还可以使用缓存。问题就是过滤器并不参与打分，而function_score查询则可以解决此问题。function_score查询是最为强大的控制打分过程的工具。它允许你对于匹配的文档应用一个方法来改变或者完全替代掉原本的打分_score.
+	实际上，可以通过过滤器来对结果集的子集应用不同的方法，这将使得过滤器的强大功能也加入到打分进程中来，它制成多种可以直接使用的预定义的方法：
+	1.weight
+	对于应用的文档得分进行提升，如果weight=2,则结果是_score翻倍
+	2.field_value_factor
+	使用文档中的一个字段的值来修改_score，比如把popularity计数或者votes的值作为因子。
+	3.random_score
+	使用固定的随机打分来对每个用户使用不同的排序，而对同一用户的保持一致的排序
+	4.逼近方法：linear,exp,gauss
+	对有可变值的字段，比如publish_date,geo_location,price，将之包含到_score中来对与之相近的文档提升打分。
+	5.script_score
+	使用自定义脚本来完全取代原来的打分逻辑，如果需要扩展已列出的种种方法，那就自己写一个脚本来实现想要的功能。
+	如果没有function_score查询的话，那就无法做到把全文搜索的得分与一个比如最近时间的计算的参数相结合起来，排序的时候必须要按照date或者_score来排序；其中一个的效果可能会被另一个抵消掉。这个查询使得你可以将他们混合在一起：仍旧按照全文本关联度进行排序，但是对于最新日期的文档赋予更高的权重。可想而知，支持这样的功能的查询将会是很复杂的，我们会一步一步的去学习如何使用它们。
