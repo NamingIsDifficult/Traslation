@@ -1,0 +1,123 @@
+	想象一下你的网站中有许多的博客，并且允许用户为他们喜欢的博客投票。我们会希望更为热门的博客出现在结果列表的更靠前的位置，不过主要的排序评判标准还是关联分数。这个功能可以通过添加一个投票数字段来轻松达成：
+	PUT /blogposts/post/1
+	{
+	  "title":   "About popularity",
+	  "content": "In this post we will talk about...",
+	  "votes":   6
+	}
+	在搜索阶段，我们可以使用function_score查询中的field_value_factor方法把投票数和全文搜索关联分数绑定到一起：
+	GET /blogposts/post/_search
+	{
+	  "query": {
+	    "function_score": { //此查询可以包裹主要的查询和需要使用的打分方法
+	      "query": { //主查询会被先行执行
+	        "multi_match": {
+	          "query":    "popularity",
+	          "fields": [ "title", "content" ]
+	        }
+	      },
+	      "field_value_factor": { //此方法将会作用于每个已匹配的文档
+	        "field": "votes" //votes字段必须有数字才能使得field_value_factor发挥效果
+	      }
+	    }
+	  }
+	}
+	在之前的例子中，每个文档最终的_score将会按照以下方式被修改：
+	new_score = old_score * number_of_votes
+	这不会使得结果集变的太大。全文本_score范围通常在0-10之间，可是一个有10个投票数的文档将会完全覆盖掉全文本打分的效果，而没有投票的文档得分将始终是0。
+	所以，一个更为合适的处理方法是使用一些modifier来把投票的值修正为更为平滑的状况。换句话说，我们希望最开始的投票对得分的贡献比重加大，而越往后影响越小。0和1的区别要比10和11的区别大得多。一个典型的modifier是log1p，它使得计算公式变成：
+	new_score = old_score * log(1 + number_of_votes)
+	对数方法使得投票数的影响不再是线性陡峭的。带modifier的请求形式如下：
+	GET /blogposts/post/_search
+	{
+	  "query": {
+	    "function_score": {
+	      "query": {
+	        "multi_match": {
+	          "query":    "popularity",
+	          "fields": [ "title", "content" ]
+	        }
+	      },
+	      "field_value_factor": {
+	        "field":    "votes",
+	        "modifier": "log1p" 
+	      }
+	    }
+	  }
+	}
+	可选的修改器有none(默认),log,log1p,log2p,ln,ln1p,ln2p,square,sqrt,reciprocal,详情查看：
+	https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-function-score-query.html#function-field-value-factor
+	热度的影响可以通过将votes字段的值与设定系数相乘来提高或者降低：
+	GET /blogposts/post/_search
+	{
+	  "query": {
+	    "function_score": {
+	      "query": {
+	        "multi_match": {
+	          "query":    "popularity",
+	          "fields": [ "title", "content" ]
+	        }
+	      },
+	      "field_value_factor": {
+	        "field":    "votes",
+	        "modifier": "log1p",
+	        "factor":   2 //votes字段的数字对得分的影响翻倍
+	      }
+	    }
+	  }
+	}
+	添加系数之后计算方程式变成如下形式：
+	new_score = old_score * log(1 + factor * number_of_votes)
+	如果使用field_value_factor使得绑定的字段对结果的影响过大的话，我们可以在查询阶段使用boost_mode参数来控制与得分绑定的方法对结果的影响，它接受以下参数值：
+	multiply
+	_score与方程式的结果相称，默认设定
+	sum
+	相加
+	min
+	_score与方程式结果两者中较小的
+	max
+	_score与方程式结果两者中较大的
+	replace
+	使用方程式的结果
+	所以，假设使用sum模式，并且选取较小的factor，那么影响就相对小很多了：
+	GET /blogposts/post/_search
+	{
+	  "query": {
+	    "function_score": {
+	      "query": {
+	        "multi_match": {
+	          "query":    "popularity",
+	          "fields": [ "title", "content" ]
+	        }
+	      },
+	      "field_value_factor": {
+	        "field":    "votes",
+	        "modifier": "log1p",
+	        "factor":   0.1
+	      },
+	      "boost_mode": "sum" 
+	    }
+	  }
+	}
+	我们还可以使用max_boost参数来对方程式的影响设定其上限：
+	GET /blogposts/post/_search
+	{
+	  "query": {
+	    "function_score": {
+	      "query": {
+	        "multi_match": {
+	          "query":    "popularity",
+	          "fields": [ "title", "content" ]
+	        }
+	      },
+	      "field_value_factor": {
+	        "field":    "votes",
+	        "modifier": "log1p",
+	        "factor":   0.1
+	      },
+	      "boost_mode": "sum",
+	      "max_boost":  1.5 //不管方程式是什么，它的最大结果也不会超过1.5.它只对方程式结果进行限制，而不是对最终结果
+	    }
+	  }
+	}
+	
