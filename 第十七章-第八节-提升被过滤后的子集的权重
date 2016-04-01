@@ -1,0 +1,30 @@
+	回到之间的度假房查找的问题，我们想要按照房子拥有的特征数量来进行打分，结论是希望能有一种方式使得缓存过的过滤器可以对打分产生影响，并且介绍了使用function_score查询的解决方法。
+	目前为止使用的例子是对所有文档使用同样的一个方程式，假设需要把结果集按照过滤器的结果拆分为不同的子集，比如一个特征对印一个过滤器，然后再对不同的子集使用不同的方程式，那么这时可以使用的方程式是weight，这和所有查询都接受的boost参数很类似，不同之处在于weight不会被Lucene的规范化过程转换为某种模糊的浮点数。
+	查询结果需要做相应的变化来适应多方程式：
+	GET /_search
+	{
+	  "query": {
+	    "function_score": {
+	      "filter": { //function_score接受查询或者过滤器，如果都未指定，则默认使用match_all查询
+	        "term": { "city": "Barcelona" }
+	      },
+	      "functions": [ //只有匹配了相应的过滤器才会被应用相应的权重
+	        {
+	          "filter": { "term": { "features": "wifi" }}, 
+	          "weight": 1
+	        },
+	        {
+	          "filter": { "term": { "features": "garden" }}, 
+	          "weight": 1
+	        },
+	        {
+	          "filter": { "term": { "features": "pool" }}, 
+	          "weight": 2 
+	        }
+	      ],
+	      "score_mode": "sum", //每个方程式会返回一个值，通过score_mode按照指定方式计算：multiply(默认),sum,avg,max,min,first(只取用第									一个没有使用过滤器或是过滤器被匹配的方程式的值)
+	    }
+	  }
+	}
+	不匹配任何过滤器的文档将会保持其原有的得分1.
+	
