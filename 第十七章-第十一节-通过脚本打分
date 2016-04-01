@@ -1,0 +1,53 @@
+	如果所有的function_score的内置方法都不满足使用需求的话，你可以通过脚本实现自己的打分逻辑，使用script_score方法。举例来说，如果要把利益边界参数化至关联分计算，按照业务规则，利益边界取决于三个参数：
+	1.度假房每晚的价格
+	2.用户的级别，某些级别在超过一定间夜门槛的时候可以有一定比率的折扣
+	3.用户折扣之后的间夜价的议价边界
+	用于计算收益的算法如下：
+	if (price < threshold) {
+	  profit = price * margin
+	} else {
+	  profit = price * (1 - discount) * margin;
+	}
+	我们可能不想使用绝对收益作为分数，这将会覆盖掉其它的参数，比如位置，热度和特征。我们可以将收益表达为目标收益的一个百分比。一个超过目标的收益边界将会获得正的得分>1.0否则为负分<1.0:
+	if (price < threshold) {
+	  profit = price * margin
+	} else {
+	  profit = price * (1 - discount) * margin
+	}
+	return profit / target
+	默认的脚本语言是Groovy;http://groovy.codehaus.org/,它和javascript很像。上面的方法用groovy写的话如下：
+	price  = doc['price'].value 
+	margin = doc['margin'].value 
+	
+	if (price < threshold) { 
+	  return price * margin / target
+	}
+	return price * (1 - discount) * margin / target 
+	最后，把script_score方法添加到方法列表之后：
+	GET /_search
+	{
+	  "function_score": {
+	    "functions": [
+	      { ...location clause... }, 
+	      { ...price clause... }, 
+	      {
+	        "script_score": {
+	          "params": { //通过设定这些参数，我们可以在查询阶段修改此参数而无须重新编译脚本
+	            "threshold": 80,
+	            "discount": 0.1,
+	            "target": 10
+	          },
+	          "script": "price  = doc['price'].value; margin = doc['margin'].value;
+	          if (price < threshold) { return price * margin / target };
+	          return price * (1 - discount) * margin / target;" //JSON不能够包含嵌入的换行符，换行符在脚本中可以被编码为\n活着使用分号																	隔离
+	        }
+	      }
+	    ]
+	  }
+	}
+	查询将会返回最适合用户对价钱和地点需求的文档，而且还将收益也作为考虑的参数加入其中。
+	script_score方法提供了巨大的便利，通过一个脚本就可以操作文本的字段，当前的得分甚至是短语频率，反响文档频率，字段长度规范化。虽然如此，脚本有着一定的性能影响，如果你发现脚本不够快，那么有这几个选项：
+	1.试着将信息尽量做预先的计算并存入文档中
+	2.groovy很快，但是不如Java快，你可以用java来实现脚本：https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-scripting.html#native-java-scripts
+	3.使用rescore功能，只对得分高的文档应用脚本
+	
