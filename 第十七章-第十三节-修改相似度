@@ -1,0 +1,45 @@
+	相似度算法可以按照字段级别设置，需要只是在字段的映射表上指定选好的算法：
+	PUT /my_index
+	{
+	  "mappings": {
+	    "doc": {
+	      "properties": {
+	        "title": {
+	          "type":       "string",
+	          "similarity": "BM25" //title字段实用BM25相似度算法
+	        },
+	        "body": {
+	          "type":       "string",
+	          "similarity": "default" //默认使用实用打分方程式
+	        }
+	      }
+	  }
+	}
+	相似度算法不支持在线修改，需要重新索引数据。
+	配置相似度算法和配置分析器很像，自定义相似度算法可以在创建索引的时候指派：
+	PUT /my_index
+	{
+	  "settings": {
+	    "similarity": {
+	      "my_bm25": { 
+	        "type": "BM25",
+	        "b":    0 
+	      }
+	    }
+	  },
+	  "mappings": {
+	    "doc": {
+	      "properties": {
+	        "title": {
+	          "type":       "string",
+	          "similarity": "my_bm25" 
+	        },
+	        "body": {
+	          "type":       "string",
+	          "similarity": "BM25" 
+	        }
+	      }
+	    }
+	  }
+	}
+	自定义相似度算法可以通过关闭索引，再更新索引设置，再重新打开索引来修改。这样就可以在不重新索引文档的情况下测试不同的配置。
